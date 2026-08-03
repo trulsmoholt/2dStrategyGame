@@ -89,12 +89,71 @@ describe('onTileClick — selected', () => {
     expect(ui).toEqual({ k: 'aiming', unitId: 0, dest: { x: 1, y: 0 }, targets: [1], reachable });
   });
 
-  it('clicking a non-highlighted tile is a no-op', () => {
+  it('clicking a non-highlighted tile deselects', () => {
     const mine = makeUnit({ id: 0, owner: 0, pos: { x: 0, y: 0 } });
     const state = stateWith([mine]);
     const selected = { k: 'selected' as const, unitId: 0, reachable: [{ x: 0, y: 0 }] };
     const { ui, action } = onTileClick(state, selected, { x: 5, y: 5 });
-    expect(ui).toEqual(selected);
+    expect(ui).toEqual({ k: 'idle' });
+    expect(action).toBeUndefined();
+  });
+
+  it('clicking a wall deselects', () => {
+    const mine = makeUnit({ id: 0, owner: 0, pos: { x: 0, y: 0 } });
+    const map = flatMap(8, 8);
+    const wallState: GameState = { ...stateWith([mine]), map: { ...map, tiles: map.tiles.map((t, i) => (i === 1 ? 'wall' : t)) } };
+    const selected = { k: 'selected' as const, unitId: 0, reachable: [{ x: 0, y: 0 }] };
+    const { ui, action } = onTileClick(wallState, selected, { x: 1, y: 0 });
+    expect(ui).toEqual({ k: 'idle' });
+    expect(action).toBeUndefined();
+  });
+
+  it('clicking the selected unit itself deselects, without moving or spending its turn', () => {
+    const mine = makeUnit({ id: 0, owner: 0, pos: { x: 0, y: 0 } });
+    const state = stateWith([mine]);
+    const selected = { k: 'selected' as const, unitId: 0, reachable: [{ x: 0, y: 0 }, { x: 1, y: 0 }] };
+    const { ui, action } = onTileClick(state, selected, { x: 0, y: 0 });
+    expect(ui).toEqual({ k: 'idle' });
+    expect(action).toBeUndefined();
+  });
+
+  it('clicking the selected unit itself enters aiming when an enemy is in range from here', () => {
+    const mine = makeUnit({ id: 0, owner: 0, pos: { x: 0, y: 0 } });
+    const enemy = makeUnit({ id: 1, owner: 1, pos: { x: 1, y: 0 } });
+    const state = stateWith([mine, enemy]);
+    const selected = { k: 'selected' as const, unitId: 0, reachable: [{ x: 0, y: 0 }] };
+    const { ui, action } = onTileClick(state, selected, { x: 0, y: 0 });
+    expect(action).toBeUndefined();
+    expect(ui).toEqual({ k: 'aiming', unitId: 0, dest: { x: 0, y: 0 }, targets: [1], reachable: selected.reachable });
+  });
+
+  it('clicking a living enemy directly (not via its own tile first) deselects, even if it is in range', () => {
+    const mine = makeUnit({ id: 0, owner: 0, type: 'ranged', pos: { x: 0, y: 0 } });
+    const enemy = makeUnit({ id: 1, owner: 1, pos: { x: 2, y: 0 } });
+    const state = stateWith([mine, enemy]);
+    const selected = { k: 'selected' as const, unitId: 0, reachable: [{ x: 0, y: 0 }] };
+    const { ui, action } = onTileClick(state, selected, { x: 2, y: 0 });
+    expect(ui).toEqual({ k: 'idle' });
+    expect(action).toBeUndefined();
+  });
+
+  it('clicking a living enemy out of range from the current tile deselects', () => {
+    const mine = makeUnit({ id: 0, owner: 0, type: 'melee', pos: { x: 0, y: 0 } });
+    const enemy = makeUnit({ id: 1, owner: 1, pos: { x: 5, y: 0 } });
+    const state = stateWith([mine, enemy]);
+    const selected = { k: 'selected' as const, unitId: 0, reachable: [{ x: 0, y: 0 }, { x: 1, y: 0 }] };
+    const { ui, action } = onTileClick(state, selected, { x: 5, y: 0 });
+    expect(ui).toEqual({ k: 'idle' });
+    expect(action).toBeUndefined();
+  });
+
+  it('clicking an ally deselects', () => {
+    const mine = makeUnit({ id: 0, owner: 0, pos: { x: 0, y: 0 } });
+    const ally = makeUnit({ id: 2, owner: 0, pos: { x: 4, y: 4 } });
+    const state = stateWith([mine, ally]);
+    const selected = { k: 'selected' as const, unitId: 0, reachable: [{ x: 0, y: 0 }] };
+    const { ui, action } = onTileClick(state, selected, { x: 4, y: 4 });
+    expect(ui).toEqual({ k: 'idle' });
     expect(action).toBeUndefined();
   });
 });

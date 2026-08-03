@@ -31,13 +31,27 @@ export function onTileClick(
     }
 
     case 'selected': {
+      const unit = state.units.find(u => u.id === ui.unitId);
+      if (!unit) return { ui: { k: 'idle' } };
+
+      // A living enemy is never on a reachable tile (occupied), so it falls
+      // straight into the deselect branch below — attacking without moving
+      // requires clicking the unit's own tile first, same as SPEC.md's flow.
       if (!ui.reachable.some(p => samePos(p, tile))) {
-        return { ui };
+        return { ui: { k: 'idle' } };   // wall, out of bounds, an ally, an enemy, etc.: deselect
       }
+
       const targets = attackableFrom(state, ui.unitId, tile);
       if (targets.length > 0) {
         return { ui: { k: 'aiming', unitId: ui.unitId, dest: tile, targets, reachable: ui.reachable } };
       }
+
+      // Clicking the unit's own tile with nothing to attack from here is a
+      // deselect, not a wasted "move to self" action.
+      if (samePos(tile, unit.pos)) {
+        return { ui: { k: 'idle' } };
+      }
+
       return { ui: { k: 'idle' }, action: { t: 'act', unitId: ui.unitId, to: tile } };
     }
 

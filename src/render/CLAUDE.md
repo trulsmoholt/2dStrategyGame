@@ -10,6 +10,22 @@ snippet omits.** `onCancel(ui)` takes only a `UiState`, no `GameState`, so
 stepping `aiming → selected` needs the reachable set available on the state
 itself rather than recomputed from the sim.
 
+**Attacking without moving still goes through `aiming`, via the unit's own
+tile.** A living enemy is never on a reachable tile (it's occupied), so
+clicking one directly while `selected` can't be a move destination —
+`onTileClick` deselects instead. To attack without moving, click the unit's
+own tile first (it's always in `reachable`); if an enemy is attackable from
+there, that enters `aiming` with `dest` equal to the unit's current
+position, same as SPEC.md's flow. (An earlier revision let a direct click
+on an in-range enemy skip straight to `aiming`/attack; that shortcut was
+deliberately reverted.)
+
+**Every click while `selected` that isn't a deliberate move or attack setup
+deselects (→ `idle`) rather than being ignored.** This covers a wall, an
+out-of-bounds tile, an ally, an out-of-range enemy — and clicking the unit's
+own tile when nothing is attackable from here, which deselects rather than
+wasting the turn on a move-to-self.
+
 **`main.ts` has no framework and no diffing** — `state`, `ui`, and `flashes`
 are plain mutable module-scope variables. Event handlers (canvas click,
 contextmenu, Escape keydown, the two buttons) mutate them directly and call
