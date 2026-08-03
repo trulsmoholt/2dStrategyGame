@@ -1,0 +1,28 @@
+// Public barrel — the ONLY module src/render may import.
+
+export type {
+  Player, UnitId, UnitTypeId, Terrain, Pos, Unit, GameMap, GameResult,
+  GameState, Action,
+} from './types';
+export { MAX_TURNS, MIN_DAMAGE, DAMAGE_ROLL_MIN, DAMAGE_ROLL_MAX } from './types';
+
+export type { Rng } from './rng';
+export { seedRng, nextRng, rollInt } from './rng';
+
+export type { UnitStats } from './units';
+export { UNIT_STATS } from './units';
+
+export { MAP_STANDARD } from './maps';
+
+export type { ParsedMap } from './map';
+export { parseMap, inBounds, terrainAt, chebyshev } from './map';
+
+export { unitAt, inEnemyZoc, reachableTiles } from './movement';
+
+export { expectedDamage, resolveAttack } from './combat';
+
+export { attackableFrom, legalActions } from './actions';
+
+export { reduce, checkResult } from './reduce';
+
+export { newGame, playOut, replay } from './game';
