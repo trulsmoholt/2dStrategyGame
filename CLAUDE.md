@@ -87,10 +87,11 @@ types.** Any code that branches on `UnitTypeId` outside that file is
 considered a bug (per SPEC.md §3.3) — stats should be looked up, not
 switched on.
 
-**`src/render/ui.ts`'s `UiState.aiming` carries a `reachable` field that
-SPEC.md's snippet omits.** `onCancel(ui)` takes only a `UiState`, no
-`GameState`, so stepping `aiming → selected` needs the reachable set
-available on the state itself rather than recomputed from the sim.
+**`src/render/` has its own [CLAUDE.md](src/render/CLAUDE.md)** for
+renderer-internal gotchas (event wiring, dimming/flash rules, draw order,
+the `UiState.aiming` deviation from SPEC.md's snippet). It's loaded
+automatically when working in that directory; this file sticks to facts
+that span layers.
 
 ## Status
 
