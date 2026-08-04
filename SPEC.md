@@ -1,6 +1,5 @@
 # SPEC — Minimal 2D Turn-Based Strategy Game
 
-Status: design complete, implementation not started.
 Stack: TypeScript + Vite + Vitest. No runtime dependencies.
 
 ---
