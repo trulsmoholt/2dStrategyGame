@@ -59,3 +59,18 @@ acted, whether or not it moved, so after ending a turn with idle units they
 render dimmed (`globalAlpha 0.55` in `drawUnit`) until that player's next
 turn resets them — this is `reduce` behavior surfacing through the
 renderer, not a `canvas.ts` bug.
+
+**Export/import (`replay.ts`) is a save/load, not a VCR.** `main.ts` tracks
+`seed` and `actionLog` alongside `state` (both reset on New Game, both
+pushed to on every `applyAction`). Export just serializes them; Import calls
+`replay(seed, log)` — the same pure sim-layer function the 100-seed
+determinism proof uses — to jump straight to the reconstructed state and
+hand control back to the player. There is no animated step-through and no
+read-only viewer mode; a successful import fully replaces `state`, `seed`,
+and `actionLog` as if the player had played it live. `parseSavedGame`
+structurally validates the pasted JSON (shape/types of every action) before
+handing off to `replay`, so a garbled paste surfaces as a message in
+`#import-error` rather than a raw exception from deep inside `reduce`; a
+paste that's structurally valid but *illegal* (e.g. acting with a unit that
+doesn't exist) still throws from `reduce` and is caught the same way. Import
+is gated on `ui.k !== 'aiTurn'`, same as every other input path.

@@ -25,6 +25,25 @@
         margin-right: 8px;
         cursor: pointer;
       }
+      #replay-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        width: 512px;
+      }
+      #replay-text {
+        font-family: monospace;
+        font-size: 12px;
+        width: 100%;
+        height: 120px;
+        box-sizing: border-box;
+        resize: vertical;
+      }
+      #import-error {
+        color: #f87171;
+        font-size: 13px;
+        min-height: 1em;
+      }
     </style>
   </head>
   <body>
@@ -32,6 +51,12 @@
     <div id="controls">
       <button id="end-turn">End turn</button>
       <button id="new-game">New game</button>
+      <button id="export-btn">Export</button>
+      <button id="import-btn">Import</button>
+    </div>
+    <div id="replay-panel">
+      <textarea id="replay-text" placeholder="Export fills this with JSON; paste JSON here and click Import to load it."></textarea>
+      <div id="import-error"></div>
     </div>
     <script type="module" src="/src/render/main.ts"></script>
   </body>

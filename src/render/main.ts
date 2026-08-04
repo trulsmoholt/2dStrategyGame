@@ -1,10 +1,11 @@
 import type { Action, GameState, UnitId } from '../sim/index';
-import { newGame, reduce } from '../sim/index';
+import { newGame, reduce, replay } from '../sim/index';
 import { chooseTurn } from '../ai/ai';
 import type { ViewState } from './canvas';
 import { CANVAS_HEIGHT, CANVAS_WIDTH, draw } from './canvas';
 import type { UiState } from './ui';
 import { onCancel, onTileClick, pixelToTile } from './ui';
+import { parseSavedGame, serializeGame } from './replay';
 
 const FLASH_MS = 180;
 const AI_STEP_MS = 400;
@@ -16,9 +17,11 @@ const rawCtx = canvas.getContext('2d');
 if (!rawCtx) throw new Error('main: 2D canvas context unavailable');
 const ctx: CanvasRenderingContext2D = rawCtx;
 
-let state: GameState = newGame(Date.now() >>> 0);
+let seed: number = Date.now() >>> 0;
+let state: GameState = newGame(seed);
 let ui: UiState = { k: 'idle' };
 let flashes: { unitId: UnitId; until: number }[] = [];
+let actionLog: Action[] = [];
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -32,6 +35,7 @@ function render(): void {
 function applyAction(action: Action): void {
   const before = state;
   state = reduce(state, action);
+  actionLog.push(action);
 
   const now = Date.now();
   for (const prevUnit of before.units) {
@@ -101,10 +105,38 @@ document.getElementById('end-turn')?.addEventListener('click', () => {
 });
 
 document.getElementById('new-game')?.addEventListener('click', () => {
-  state = newGame(Date.now() >>> 0);
+  seed = Date.now() >>> 0;
+  state = newGame(seed);
   ui = { k: 'idle' };
   flashes = [];
+  actionLog = [];
   render();
+});
+
+const replayText = document.getElementById('replay-text') as HTMLTextAreaElement | null;
+const importError = document.getElementById('import-error');
+
+document.getElementById('export-btn')?.addEventListener('click', () => {
+  if (!replayText) return;
+  replayText.value = serializeGame(seed, actionLog);
+  if (importError) importError.textContent = '';
+  replayText.select();
+});
+
+document.getElementById('import-btn')?.addEventListener('click', () => {
+  if (ui.k === 'aiTurn' || !replayText) return;
+  try {
+    const saved = parseSavedGame(replayText.value);
+    state = replay(saved.seed, saved.log);
+    seed = saved.seed;
+    actionLog = saved.log;
+    flashes = [];
+    ui = state.result ? { k: 'over', result: state.result } : { k: 'idle' };
+    if (importError) importError.textContent = '';
+    render();
+  } catch (err) {
+    if (importError) importError.textContent = err instanceof Error ? err.message : String(err);
+  }
 });
 
 function loop(): void {

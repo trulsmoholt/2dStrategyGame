@@ -104,3 +104,11 @@ end-to-end (selection/highlighting, melee trade, ranged no-counter attack,
 Escape-to-cancel, AI turn stepping, a loss banner, and New Game reseeding
 onto the same map). A win and a draw banner were exercised only via
 `canvas.test.ts`'s unit test, not manually in-browser.
+
+`src/render/replay.ts` adds game export/import: `main.ts` tracks the current
+game's seed and action log, `Export` serializes them to a textarea as JSON,
+and `Import` parses/validates pasted JSON and calls the existing
+`replay(seed, log)` (`src/sim/game.ts`) to jump straight to that
+reconstructed state and resume live play from there — see
+[src/render/CLAUDE.md](src/render/CLAUDE.md) for the validation/error-display
+details.
