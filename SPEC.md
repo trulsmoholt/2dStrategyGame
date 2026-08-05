@@ -2,6 +2,13 @@
 
 Stack: TypeScript + Vite + Vitest. No runtime dependencies.
 
+**Sections 1–8 specify V1, which is built and verified.** [Section 9](#9--v2--northern-norway)
+specifies V2 (a Northern Norway map, water, ships and planes) and is the
+forward-looking part of this document: it overturns several V1 decisions, and
+says which ones, in which order. Where §9 contradicts §1–§8, §9 wins for
+anything not yet implemented, and §1–§8 are amended in place as each V2 phase
+lands.
+
 ---
 
 ## 1. Design summary
@@ -17,7 +24,7 @@ greedy AI. Units move and attack once per turn; last army standing wins.
 | Combat | Seeded RNG damage roll, minimum 1 damage |
 | Counterattack | Only if the defender survives and the attacker is in the defender's range |
 | Randomness | PRNG state is a field in `GameState`, advanced purely |
-| Stacking | One unit per tile |
+| Stacking | One unit per tile — concentration of force is via merging (§9.2) |
 | Zone of control | Entering a tile adjacent to an enemy halts movement — no exceptions |
 | Geometry | 8-way movement, Chebyshev distance, diagonals always legal |
 | Roster | 2 unit types, 2 terrain types (data-driven, designed to grow) |
@@ -110,6 +117,7 @@ export interface Unit {
   readonly pos: Pos;
   readonly hp: number;
   readonly hasActed: boolean;
+  readonly stack: number;      // 1 unless merged — see §9.2
 }
 
 export interface GameMap {
@@ -133,9 +141,11 @@ export type Action =
   | { readonly t: 'act'; readonly unitId: UnitId; readonly to: Pos;
       readonly targetId?: UnitId }
   | { readonly t: 'wait'; readonly unitId: UnitId }
+  | { readonly t: 'merge'; readonly unitId: UnitId; readonly absorbId: UnitId }
   | { readonly t: 'endTurn' };
 
 export const MAX_TURNS = 50;
+export const MAX_STACK = 3;
 export const MIN_DAMAGE = 1;
 export const DAMAGE_ROLL_MIN = -1;   // inclusive
 export const DAMAGE_ROLL_MAX = 1;    // inclusive
@@ -180,6 +190,11 @@ export const UNIT_STATS: Record<UnitTypeId, UnitStats> = {
 **This table is the extension point.** Adding a third unit type must require
 editing `UnitTypeId` and this record and nothing else. Any code that
 `switch`es on unit type outside this file is a bug.
+
+`units.ts` also owns the three merge-aware helpers of §9.2 — `unitMaxHp`,
+`unitPower`, and `mergeKind`. Reading `UNIT_STATS[u.type].power` or
+`.maxHp` for a *unit* anywhere else is a bug for the same reason: it silently
+ignores `stack`.
 
 ### 3.4 `src/sim/map.ts` and `maps.ts`
 
@@ -298,6 +313,9 @@ export function legalActions(state: GameState): Action[];
   destination, for every un-acted unit;
 - one `{ t: 'wait', unitId }` per un-acted unit — always available, so a
   fully-surrounded unit never blocks turn completion;
+- one `{ t: 'merge', unitId, absorbId }` per un-acted unit × legal merge
+  partner (§9.2). Emitted in both directions, since which unit survives is
+  the player's choice and changes where the merged unit stands;
 - always exactly one `{ t: 'endTurn' }`.
 
 **Invariant: `legalActions(state).length >= 1` whenever `result === null`.**
@@ -319,6 +337,10 @@ expected to have consulted `legalActions`). Behaviour:
   `hasActed = true` on the acting unit (if it survived its own counter);
   then re-checks the result.
 - `wait` — sets `hasActed = true`, nothing else.
+- `merge` — validates both units per §9.2; sums `hp` and `stack` onto
+  `unitId`, removes `absorbId`, sets `hasActed = true` on the survivor.
+  Consumes no randomness. Both units are spent: the absorbed one is gone, and
+  the survivor has acted.
 - `endTurn` — marks every remaining unit of `current` as acted, flips
   `current`, clears `hasActed` on the incoming player's units; if the
   incoming player is 0, increments `turn`; then re-checks the result.
@@ -406,6 +428,7 @@ export type UiState =
   | { k: 'idle' }
   | { k: 'selected'; unitId: UnitId; reachable: Pos[] }
   | { k: 'aiming'; unitId: UnitId; dest: Pos; targets: UnitId[] }
+  | { k: 'merging'; unitId: UnitId; candidates: UnitId[] }
   | { k: 'aiTurn' }
   | { k: 'over'; result: GameResult };
 
@@ -413,6 +436,7 @@ export function pixelToTile(px: number, py: number): Pos;
 export function onTileClick(
   state: GameState, ui: UiState, tile: Pos,
 ): { ui: UiState; action?: Action };
+export function onMerge(state: GameState, ui: UiState): UiState;
 export function onCancel(ui: UiState): UiState;
 ```
 
@@ -428,9 +452,28 @@ Selection flow:
 - `aiming` + click elsewhere → emit the move without an attack, back to
   `idle`.
 - Escape or right-click → `onCancel` steps back one level
-  (`aiming` → `selected` → `idle`). Nothing has been committed to the sim, so
-  cancelling discards a preview and nothing more.
+  (`aiming` → `selected` → `idle`, `merging` → `selected`). Nothing has been
+  committed to the sim, so cancelling discards a preview and nothing more.
 - All clicks are ignored while `k === 'aiTurn'`.
+
+Move is the only mode reachable by clicking the board, and attack follows
+from it automatically: choosing a destination with an enemy in range enters
+`aiming` rather than needing an "attack" mode. Merging is the one action that
+needs to be asked for, so it is the one button on the action panel:
+
+- `selected` + Merge button → `onMerge` returns `merging`, with the legal
+  merge partners (§9.2) highlighted. The button is disabled when the
+  selection has none.
+- `merging` + click a highlighted partner → emit
+  `{ t: 'merge', unitId, absorbId }`, back to `idle`. The *selected* unit is
+  the survivor, so the merged unit stands where the first click was.
+- `merging` + click anything else → `idle`, per the deselect-on-invalid-click
+  rule.
+
+The panel is HTML, not canvas-drawn — the canvas click handler converts every
+click into a tile coordinate, and a drawn panel would need region
+hit-testing ahead of that. It is a fourth input path and is gated on
+`k === 'aiTurn'` identically to the other three.
 
 `UiState` lives entirely in the renderer. The sim has no concept of selection.
 
@@ -479,19 +522,24 @@ nondeterministic value enters the system, and it enters as a seed.
 
 ## 6. Explicitly out of scope
 
-Not in this version. Listed so they are decisions, not omissions:
+Not in this version. Listed so they are decisions, not omissions. Entries
+marked **→ §9** are reclaimed by V2 and are no longer permanent decisions:
 
 - Terrain effects of any kind — no movement cost, no defence bonus. `wall` is
   purely impassable. Movement is uniform cost, so BFS never needs to become
-  Dijkstra.
+  Dijkstra. **→ §9, phase 2.**
 - Any third unit type, unit abilities, items, upgrades, veterancy, or healing.
-- Multiple maps, a map-select screen, or procedural generation.
+  **→ §9, phase 5** for ship and plane. Merging (§9.2) is the one exception
+  already built: it is not an ability on a unit type, it is an action.
+- Multiple maps, a map-select screen, or procedural generation. **→ §9,
+  phases 3–4.**
 - Fog of war and any form of hidden information. Both players see everything;
   `GameState` has no per-player view.
 - Undo, redo, save/load, or a persisted replay format. `{ seed, log }` is
   sufficient to reconstruct any game, but nothing writes it to disk.
 - Human-vs-human hot seat, and networked play.
 - Movement tweening, attack animations, sound, particles, camera or zoom.
+  **Board size → §9, phase 1**; tweening and sound remain out of scope.
 - Sprites or any loaded asset. The renderer must have no async init.
 - Difficulty levels, and any AI deeper than one ply. No minimax, no
   expectimax, no lookahead across units.
@@ -519,6 +567,12 @@ Unit tests (`src/sim/__tests__/`):
   action; `endTurn` resets flags and flips `current`; `turn` increments only
   when play returns to Player 0; eliminating the last enemy unit sets
   `result` in the same reduction.
+- `merge.test.ts` — derived stats scale with `stack` while mp and range do
+  not; a merged attacker deals stack-scaled damage; `canMerge` rejects
+  different types, enemies, non-adjacent units, already-acted units, and
+  anything over `MAX_STACK`; `legalActions` offers both directions; `reduce`
+  sums hp and stack onto the survivor, removes the absorbed unit, spends the
+  turn, and consumes no RNG.
 - An import-boundary test asserting no file under `src/sim/` contains an
   import from `src/render` or `src/ai`.
 
@@ -594,3 +648,162 @@ Then, in one sitting, confirm all of the following:
 
 The game is complete when `npm test` is green and all eight browser checks
 pass.
+
+---
+
+## 9 — V2 — Northern Norway
+
+Goal: a larger, geographically-inspired map with water, and unit types that
+use it (ships, planes). Every phase below ends with a green `npm test` and a
+playable game; V1's 16×16 board stays playable throughout.
+
+### 9.1 Phase order
+
+| # | Change | Status |
+| --- | --- | --- |
+| M | **Merging** (§9.2) — independent of the map work, so it lands first | **built** |
+| 1 | Renderer derives board size from `state.map` instead of a hardcoded 16 | not started |
+| 2 | Terrain cost table + movement domains (land/sea/air); BFS → Dijkstra | not started |
+| 3 | Map format: terrain layer separate from the unit roster; multiple maps | not started |
+| 4 | Path-distance AI seek **and** the Northern Norway map, together | not started |
+| 5 | Ship and plane unit types; cargo (§9.3) | not started |
+| 6 | Victory conditions and turn-cap retune | not started |
+
+Two ordering constraints are not negotiable:
+
+- **Phase 4 is one phase, not two.** The seek phase in `ai.ts` minimises
+  Chebyshev distance to the nearest enemy (§4). On a coastline that walks
+  land units to the shore and strands them opposite an enemy they can never
+  path to — every game becomes a turn-cap draw. The seek phase must move to
+  a Dijkstra distance field over passable terrain in the same change that
+  introduces the map.
+- **Phase 2 precedes phase 5.** Ships and planes are stat-table rows plus a
+  domain; without the domain table they are hardcoded special cases.
+
+Phase 4 also ends the map's 180°-rotational symmetry, which is what currently
+makes "both sides win at least once" (§8) a meaningful fairness check.
+Balance moves to asymmetric rosters, and the self-play assertion becomes a
+win-rate band rather than a presence check.
+
+### 9.2 Merging — built
+
+Two adjacent friendly units of the **same type** can be merged into one
+stronger unit. This is how the game handles concentration of force without
+stacking: the one-unit-per-tile invariant that `unitAt`, `reachableTiles`
+occupancy, and ZoC all depend on is never broken.
+
+```ts
+// types.ts
+readonly stack: number;    // on Unit; 1 for an unmerged unit
+export const MAX_STACK = 3;
+
+export type Action =
+  | …
+  | { readonly t: 'merge'; readonly unitId: UnitId; readonly absorbId: UnitId };
+```
+
+`unitId` is the survivor (the unit the player clicked first); `absorbId` is
+removed from `state.units`. Legal iff both units are alive, both owned by
+`state.current`, both `!hasActed`, `chebyshev === 1`, the same `type`, and
+`a.stack + b.stack <= MAX_STACK`. The effect is `stack` and `hp` summed onto
+the survivor, `hasActed = true` on it, and the absorbed unit removed. The
+survivor does not move, and no randomness is consumed.
+
+**Derived stats.** Only two stats scale, in `units.ts`:
+
+```ts
+export function unitMaxHp(u: Unit): number { return UNIT_STATS[u.type].maxHp * u.stack; }
+export function unitPower(u: Unit): number { return UNIT_STATS[u.type].power * u.stack; }
+```
+
+`mp`, `range` and `glyph` are unchanged by merging, which is precisely why
+merging is restricted to a single type — there is no fold to define, no
+ordering question, and `movement.ts` and `actions.ts` need no changes at all.
+`UNIT_STATS` remains the extension point of §3.3; these two helpers are the
+only permitted way to read a *unit's* effective power or max HP, and raw
+`UNIT_STATS[u.type].power` / `.maxHp` outside `units.ts` is a bug.
+
+**Power scales, not just HP.** With HP alone, merging halves your damage
+output and your ZoC footprint and returns nothing — two melee deal 8 damage
+per turn and take 8 in counters, a merged pair would deal 4 and take 4. It
+would be a strictly dominated button. Scaling power makes it a real
+trade: the merged pair deals the same 8 but takes only one counter instead of
+two, paid for with half the board presence, one action per turn instead of
+two, and the risk of losing everything in one exchange.
+
+**Consequences, accepted:**
+
+- Merging permanently reduces your action count for the rest of the game.
+  There is no split — splitting would have to mint a `UnitId` at runtime,
+  and ids currently come from `parseMap` reading order, so it would need a
+  `nextId` counter on `GameState` to stay replay-deterministic.
+- `checkResult` counts bodies, so an army merged down to one unit loses the
+  moment that unit dies.
+- `MAX_STACK = 3` exists so the endgame cannot collapse into a single
+  doomstack.
+
+**The AI never merges, deliberately.** Two heuristics were tried and measured
+over the same 300 seeds:
+
+| AI | P0 wins | merges |
+| --- | --- | --- |
+| never merges (shipped) | 138 / 300 | 0 |
+| merges below 40% HP, preferring the most damaged partner | 92 / 300 | 111 |
+| …preferring the healthiest partner | 92 / 300 | 111 |
+
+Both cost ~15 percentage points. (The two variants are identical because
+adjacency + same-type + both-un-acted almost always leaves exactly one
+candidate, so the preference never gets to matter.) A first attempt that
+gated merging on "nothing to attack" fired **zero** times in 100 games: a
+unit is below 40% HP precisely *because* it is in contact, so it always has
+an attack available. Merging has to compete with attacking, not follow it.
+
+This is a property of `MAP_STANDARD`, not of the mechanic. On an open board
+both units in a pair can always bring their attacks to bear, so merging
+forfeits an attack every turn plus a body's worth of zone of control. On a
+one-tile chokepoint — phase 4's terrain — the second unit cannot attack
+anyway and its ZoC is redundant, so merging costs nothing and the halved
+counterattack exposure is pure profit. **Re-test the heuristic when phase 4
+lands**; until there is a map where merging pays, shipping a heuristic that
+measurably weakens the AI is worse than shipping none. `applyExpected` in
+`ai.ts` already handles the action, so only `chooseUnitAction` needs to
+change.
+
+**Dispatch rule.** Whether two units can merge is decided by `mergeKind` in
+`units.ts`, never by a type comparison at the call site:
+
+```ts
+export type MergeKind = 'stack';
+export function mergeKind(a: Unit, b: Unit): MergeKind | null;
+```
+
+This is the seam §9.3 grows through. A `UnitTypeId` comparison anywhere
+outside `units.ts` is the same class of bug as a `switch` on unit type
+(§3.3).
+
+### 9.3 Cargo — designed for, not built
+
+Loading an infantry onto a ship is the same player-facing verb as merging,
+and reuses the same action and the same UI panel, but has a different
+effect: it sets cargo on the carrier instead of scaling its stack.
+`mergeKind` gains a `'load'` result and `UnitStats` gains a `capacity`
+column; `reduce` grows one branch. Nothing built in §9.2 changes.
+
+Two decisions are recorded here so the later change stays additive:
+
+- **Passengers nest inside the carrier** (`cargo: readonly Unit[]`) and are
+  removed from `state.units` — they do not stay in the array behind a
+  `carriedBy` flag. Nesting keeps every existing scan (`unitAt`,
+  `inEnemyZoc`, `attackableFrom`, `legalActions`, `checkResult`, the AI's
+  enemy list, the renderer) correct by construction rather than by
+  remembering to filter in seven places. It also preserves the passenger's
+  `Unit` object intact, so unloading restores its original id and the
+  `nextId` problem never arises.
+- **Capacity counts `stack`, not bodies.** A `stack: 2` infantry occupies
+  two slots, or merging becomes a way to smuggle a doubled unit aboard.
+
+Still to build when cargo lands: an unload action (it targets a *tile*, so it
+needs its own `UiState` variant and its own panel button, plus a rule for
+whose turn it spends), and AI handling — an AI that loads but never unloads
+strands its own army at sea, which is the same failure family as the
+Chebyshev-seek problem in §9.1.

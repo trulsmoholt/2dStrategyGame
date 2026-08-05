@@ -53,6 +53,12 @@ the whole game is a pure function of `(seed, action log)`. This is what makes
 final state — see `src/sim/__tests__/selfplay.test.ts` for the determinism
 proof across 100 seeds.
 
+**`src/ai/ai.ts` never merges**, by measurement rather than oversight — every
+heuristic tried cost it ~15 points of win rate on `MAP_STANDARD`, because
+merging's cost is immediate and its payoff is positional. SPEC.md §9.2 has
+the numbers and the condition to re-test under (a map with chokepoints).
+Don't add one back without re-running that comparison.
+
 **`src/ai/ai.ts` never rolls randomness.** It scores actions with
 `expectedDamage` (deterministic, = unit power) instead of the real dice roll,
 so `chooseTurn`/`chooseAction` are pure functions of `state` that never
@@ -85,7 +91,19 @@ on a countered one — tested explicitly in `combat.test.ts`.
 **`UNIT_STATS` in `src/sim/units.ts` is the single extension point for unit
 types.** Any code that branches on `UnitTypeId` outside that file is
 considered a bug (per SPEC.md §3.3) — stats should be looked up, not
-switched on.
+switched on. That now includes *comparing* two units' types: use
+`mergeKind(a, b)` rather than `a.type === b.type`, so cargo (SPEC.md §9.3)
+can extend the dispatch in one place.
+
+**Merging means two stats are per-unit, not per-type.** A merged unit carries
+`stack > 1` (SPEC.md §9.2), and `maxHp` and `power` scale with it. Read them
+via `unitMaxHp(u)` / `unitPower(u)` from `units.ts`; reaching for
+`UNIT_STATS[u.type].maxHp` or `.power` silently ignores `stack` and is a bug.
+`mp`, `range` and `glyph` are unaffected by merging and are still read
+straight from the table — which is exactly why merging is restricted to a
+single unit type and `movement.ts` and `actions.ts` needed no changes.
+`expectedDamage` already funnels through `unitPower`, so `src/ai/` gets the
+scaling for free and never reads either stat directly.
 
 **`src/render/` has its own [CLAUDE.md](src/render/CLAUDE.md)** for
 renderer-internal gotchas (event wiring, dimming/flash rules, draw order,
@@ -104,6 +122,13 @@ end-to-end (selection/highlighting, melee trade, ranged no-counter attack,
 Escape-to-cancel, AI turn stepping, a loss banner, and New Game reseeding
 onto the same map). A win and a draw banner were exercised only via
 `canvas.test.ts`'s unit test, not manually in-browser.
+
+**Merging (SPEC.md §9.2) is built** — the first piece of V2. Two adjacent
+same-type friendly units combine into one with summed HP and `stack`, scaling
+maxHp and power. It is the answer to concentration of force *instead of*
+stacking, so the one-unit-per-tile invariant that `unitAt`, `reachableTiles`
+occupancy and ZoC all rely on stays intact. The player drives it from the
+HTML action panel; the AI does not use it (see above).
 
 `src/render/replay.ts` adds game export/import: `main.ts` tracks the current
 game's seed and action log, `Export` serializes them to a textarea as JSON,

@@ -4,7 +4,7 @@ import { chooseTurn } from '../ai/ai';
 import type { ViewState } from './canvas';
 import { CANVAS_HEIGHT, CANVAS_WIDTH, draw } from './canvas';
 import type { UiState } from './ui';
-import { onCancel, onTileClick, pixelToTile } from './ui';
+import { mergeCandidates, onCancel, onMerge, onTileClick, pixelToTile } from './ui';
 import { parseSavedGame, serializeGame } from './replay';
 
 const FLASH_MS = 180;
@@ -27,9 +27,35 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+const mergeBtn = document.getElementById('merge-btn') as HTMLButtonElement | null;
+const actionHint = document.getElementById('action-hint');
+
+// The panel is derived from (state, ui) on every render, same as the canvas —
+// no separate panel state to keep in sync.
+function renderPanel(): void {
+  const locked = ui.k === 'aiTurn' || ui.k === 'over';
+  const candidates = locked ? [] : mergeCandidates(state, ui);
+
+  if (mergeBtn) {
+    mergeBtn.disabled = candidates.length === 0;
+    mergeBtn.textContent = ui.k === 'merging' ? 'Cancel merge' : 'Merge';
+  }
+
+  if (actionHint) {
+    actionHint.textContent =
+      ui.k === 'aiTurn' ? 'AI is moving…'
+      : ui.k === 'over' ? 'Game over.'
+      : ui.k === 'merging' ? 'Click a highlighted ally to merge into this unit.'
+      : ui.k === 'idle' ? 'Select a unit. Move is automatic; attack follows a move.'
+      : candidates.length > 0 ? 'Merge is available with an adjacent same-type ally.'
+      : 'No merge available for this unit.';
+  }
+}
+
 function render(): void {
   const view: ViewState = { ui, flashes };
   draw(ctx, state, view);
+  renderPanel();
 }
 
 function applyAction(action: Action): void {
@@ -90,6 +116,13 @@ canvas.addEventListener('contextmenu', event => {
 
 window.addEventListener('keydown', event => {
   if (event.key === 'Escape') handleCancel();
+});
+
+// Fourth input path — gated on 'aiTurn' identically to the other three.
+mergeBtn?.addEventListener('click', () => {
+  if (ui.k === 'aiTurn') return;
+  ui = ui.k === 'merging' ? onCancel(ui) : onMerge(state, ui);
+  render();
 });
 
 document.getElementById('end-turn')?.addEventListener('click', () => {

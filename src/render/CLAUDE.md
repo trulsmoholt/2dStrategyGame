@@ -5,10 +5,13 @@ Directory-scoped guidance for `src/render/`. Loaded alongside the root
 for commands and cross-layer architecture. SPEC.md §5 has the intended
 design; this covers what isn't obvious from reading it.
 
-**`ui.ts`'s `UiState.aiming` carries a `reachable` field that SPEC.md's
-snippet omits.** `onCancel(ui)` takes only a `UiState`, no `GameState`, so
-stepping `aiming → selected` needs the reachable set available on the state
-itself rather than recomputed from the sim.
+**`ui.ts`'s `UiState.aiming` and `.merging` both carry a `reachable` field
+that SPEC.md's snippet omits.** `onCancel(ui)` takes only a `UiState`, no
+`GameState`, so stepping `aiming → selected` or `merging → selected` needs
+the reachable set available on the state itself rather than recomputed from
+the sim. `merging` never *uses* it for drawing — a merging unit isn't going
+to move, so `drawOverlays` skips the reachable tint and shows only the green
+merge-candidate highlight — it is carried purely so cancel can restore it.
 
 **Attacking without moving still goes through `aiming`, via the unit's own
 tile.** A living enemy is never on a reachable tile (it's occupied), so
@@ -44,8 +47,20 @@ the diff runs.
 
 **`ui.k === 'aiTurn'` is the single input lock**, checked identically at the
 top of the canvas click handler, `handleCancel` (shared by right-click and
-Escape), and the End Turn button handler in `main.ts`. Any new input path
-should be gated the same way rather than adding a fourth ad hoc check.
+Escape), the End Turn button handler, and the Merge button handler in
+`main.ts`. Any new input path should be gated the same way rather than adding
+a fifth ad hoc check.
+
+**The action panel is HTML, not canvas-drawn, and is derived state.** The
+canvas click handler turns *every* click into a tile coordinate, so a
+panel painted onto the canvas would need region hit-testing ahead of that;
+`#action-panel` in `index.html` sidesteps the whole problem. `renderPanel()`
+recomputes the button's enabled/label state and the hint text from
+`(state, ui)` on every `render()`, so there is no panel state to keep in
+sync — same discipline as the canvas full redraw. The Merge button is a
+toggle: it reads `Cancel merge` and calls `onCancel` while `k === 'merging'`.
+`onMerge` returns `ui` unchanged when there is nothing to merge with, so a
+stale or mis-enabled button is a no-op rather than an error.
 
 **Overlays are drawn *under* units, not over them** — `canvas.ts`'s `draw()`
 order is terrain → reachable overlay → attackable overlay → units. Since

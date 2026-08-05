@@ -44,7 +44,10 @@ export function parseMap(ascii: string): ParsedMap {
   let nextId = 0;
 
   const placeUnit = (owner: Player, type: UnitTypeId, x: number, y: number) => {
-    units.push({ id: nextId++, owner, type, pos: { x, y }, hp: UNIT_STATS[type].maxHp, hasActed: false });
+    units.push({
+      id: nextId++, owner, type, pos: { x, y },
+      hp: UNIT_STATS[type].maxHp, hasActed: false, stack: 1,
+    });
   };
 
   for (let y = 0; y < height; y++) {

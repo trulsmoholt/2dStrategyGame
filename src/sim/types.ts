@@ -12,6 +12,10 @@ export interface Unit {
   readonly pos: Pos;
   readonly hp: number;
   readonly hasActed: boolean;
+  // How many units of `type` are merged into this one; 1 for an unmerged
+  // unit. Scales maxHp and power only — never mp, range or glyph, which is
+  // why merging is restricted to a single type. See SPEC.md §9.2.
+  readonly stack: number;
 }
 
 export interface GameMap {
@@ -35,9 +39,12 @@ export type Action =
   | { readonly t: 'act'; readonly unitId: UnitId; readonly to: Pos;
       readonly targetId?: UnitId }
   | { readonly t: 'wait'; readonly unitId: UnitId }
+  // `unitId` survives and keeps its position; `absorbId` is removed.
+  | { readonly t: 'merge'; readonly unitId: UnitId; readonly absorbId: UnitId }
   | { readonly t: 'endTurn' };
 
 export const MAX_TURNS = 50;
+export const MAX_STACK = 3;
 export const MIN_DAMAGE = 1;
 export const DAMAGE_ROLL_MIN = -1;   // inclusive
 export const DAMAGE_ROLL_MAX = 1;    // inclusive

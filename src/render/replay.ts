@@ -48,6 +48,17 @@ function parseAction(v: unknown, index: number): Action {
       return { t: 'wait', unitId: a.unitId };
     }
 
+    case 'merge': {
+      const a = v as { unitId?: unknown; absorbId?: unknown };
+      if (typeof a.unitId !== 'number') {
+        throw new Error(`parseSavedGame: log[${index}] ('merge') missing numeric unitId`);
+      }
+      if (typeof a.absorbId !== 'number') {
+        throw new Error(`parseSavedGame: log[${index}] ('merge') missing numeric absorbId`);
+      }
+      return { t: 'merge', unitId: a.unitId, absorbId: a.absorbId };
+    }
+
     case 'endTurn':
       return { t: 'endTurn' };
 

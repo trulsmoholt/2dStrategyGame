@@ -1,14 +1,15 @@
 import type { Action, GameResult, GameState, Pos, UnitId } from '../sim/index';
-import { attackableFrom, reachableTiles, unitAt } from '../sim/index';
+import { attackableFrom, mergeableWith, reachableTiles, unitAt } from '../sim/index';
 
 export const TILE_SIZE = 32;
 
 export type UiState =
   | { k: 'idle' }
   | { k: 'selected'; unitId: UnitId; reachable: Pos[] }
-  // `reachable` is carried here too (SPEC.md's snippet omits it) so onCancel
-  // can step back to 'selected' from just a UiState, with no GameState.
+  // `reachable` is carried on aiming and merging too so onCancel can step back
+  // to 'selected' from just a UiState, with no GameState.
   | { k: 'aiming'; unitId: UnitId; dest: Pos; targets: UnitId[]; reachable: Pos[] }
+  | { k: 'merging'; unitId: UnitId; candidates: UnitId[]; reachable: Pos[] }
   | { k: 'aiTurn' }
   | { k: 'over'; result: GameResult };
 
@@ -66,6 +67,20 @@ export function onTileClick(
       return { ui: { k: 'idle' }, action: { t: 'act', unitId: ui.unitId, to: ui.dest } };
     }
 
+    case 'merging': {
+      const clicked = unitAt(state, tile);
+      if (clicked && ui.candidates.includes(clicked.id)) {
+        // The selected unit survives and keeps its tile, so the merged unit
+        // stands where the player first clicked.
+        return {
+          ui: { k: 'idle' },
+          action: { t: 'merge', unitId: ui.unitId, absorbId: clicked.id },
+        };
+      }
+      // Anything else deselects, same as every other invalid click.
+      return { ui: { k: 'idle' } };
+    }
+
     case 'aiTurn':
     case 'over':
       return { ui };
@@ -77,9 +92,26 @@ export function onTileClick(
   }
 }
 
+// The action panel's Merge button. Only meaningful while a unit is selected;
+// returns `ui` unchanged when there is nothing to merge with, so a stale or
+// mis-enabled button is a no-op rather than an error.
+export function onMerge(state: GameState, ui: UiState): UiState {
+  if (ui.k !== 'selected') return ui;
+  const candidates = mergeableWith(state, ui.unitId);
+  if (candidates.length === 0) return ui;
+  return { k: 'merging', unitId: ui.unitId, candidates, reachable: ui.reachable };
+}
+
+// Whether the Merge button should be enabled for the current selection.
+export function mergeCandidates(state: GameState, ui: UiState): UnitId[] {
+  if (ui.k !== 'selected' && ui.k !== 'merging') return [];
+  return mergeableWith(state, ui.unitId);
+}
+
 export function onCancel(ui: UiState): UiState {
   switch (ui.k) {
     case 'aiming':
+    case 'merging':
       return { k: 'selected', unitId: ui.unitId, reachable: ui.reachable };
     case 'selected':
       return { k: 'idle' };

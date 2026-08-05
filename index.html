@@ -19,6 +19,46 @@
         border: 1px solid #4b5563;
         image-rendering: pixelated;
       }
+      /* align-items: flex-end pins the panel to the bottom of the board, so it
+         sits at the bottom-right of the play area. */
+      #stage {
+        display: flex;
+        align-items: flex-end;
+        gap: 16px;
+      }
+      #action-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        width: 140px;
+        padding: 10px;
+        border: 1px solid #4b5563;
+        border-radius: 4px;
+        background: #111827;
+      }
+      #action-panel .panel-title {
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: #9ca3af;
+      }
+      #action-panel .panel-hint {
+        font-size: 12px;
+        line-height: 1.35;
+        color: #9ca3af;
+        min-height: 3.2em;
+      }
+      #action-panel button {
+        font: inherit;
+        font-size: 14px;
+        padding: 6px 10px;
+        cursor: pointer;
+      }
+      #action-panel button:disabled {
+        cursor: default;
+        opacity: 0.45;
+      }
       #controls button {
         font: inherit;
         padding: 6px 14px;
@@ -47,7 +87,14 @@
     </style>
   </head>
   <body>
-    <canvas id="board"></canvas>
+    <div id="stage">
+      <canvas id="board"></canvas>
+      <div id="action-panel">
+        <div class="panel-title">Actions</div>
+        <div class="panel-hint" id="action-hint">Select a unit</div>
+        <button id="merge-btn" disabled>Merge</button>
+      </div>
+    </div>
     <div id="controls">
       <button id="end-turn">End turn</button>
       <button id="new-game">New game</button>

@@ -1,6 +1,14 @@
 import type { Action, GameState, Pos, Unit, UnitId } from '../sim/index';
 import { attackableFrom, chebyshev, expectedDamage, reachableTiles, UNIT_STATS } from '../sim/index';
 
+// The AI never merges — deliberately, and measured. See SPEC.md §9.2: the
+// heuristics tried cost it ~15 percentage points of win rate over 300 seeds,
+// because merging's cost (a full turn of offence, plus a body's worth of zone
+// of control) is immediate while its payoff (taking one counterattack per turn
+// instead of two) is positional and deferred. A one-ply greedy scorer cannot
+// see that, and SPEC.md §6 rules out lookahead. `applyExpected` below still
+// handles the action, so nothing breaks if that changes.
+
 // 0 if the kill lands (no counter possible from a dead unit) or the
 // attacker ends up out of the target's range; otherwise the target's
 // expected retaliation damage.
@@ -82,6 +90,19 @@ function applyExpected(state: GameState, action: Action): GameState {
     return {
       ...state,
       units: state.units.map(u => (u.id === action.unitId ? { ...u, hasActed: true } : u)),
+    };
+  }
+
+  if (action.t === 'merge') {
+    const survivor = state.units.find(u => u.id === action.unitId)!;
+    const absorbed = state.units.find(u => u.id === action.absorbId)!;
+    return {
+      ...state,
+      units: state.units
+        .filter(u => u.id !== absorbed.id)
+        .map(u => (u.id === survivor.id
+          ? { ...u, hp: u.hp + absorbed.hp, stack: u.stack + absorbed.stack, hasActed: true }
+          : u)),
     };
   }
 

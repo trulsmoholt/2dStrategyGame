@@ -20,6 +20,7 @@ function makeUnit(partial: Partial<Unit> & { id: number; owner: 0 | 1; pos: Pos 
     type: 'melee',
     hp: 10,
     hasActed: false,
+    stack: 1,
     ...partial,
   };
 }

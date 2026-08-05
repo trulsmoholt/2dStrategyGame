@@ -14,6 +14,7 @@ function makeUnit(partial: Partial<Unit> & { id: number; owner: 0 | 1 }): Unit {
     pos: { x: 0, y: 0 },
     hp: 10,
     hasActed: false,
+    stack: 1,
     ...partial,
   };
 }

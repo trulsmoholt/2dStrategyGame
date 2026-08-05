@@ -1,5 +1,5 @@
 import type { GameState, Unit, UnitId } from '../sim/index';
-import { UNIT_STATS, terrainAt } from '../sim/index';
+import { UNIT_STATS, terrainAt, unitMaxHp } from '../sim/index';
 import type { UiState } from './ui';
 import { TILE_SIZE } from './ui';
 
@@ -18,6 +18,7 @@ const OWNER_COLOR: Record<0 | 1, string> = { 0: '#2563eb', 1: '#dc2626' };
 const TERRAIN_COLOR: Record<'plain' | 'wall', string> = { plain: '#e8f5e9', wall: '#374151' };
 const REACHABLE_OVERLAY = 'rgba(37, 99, 235, 0.28)';
 const ATTACKABLE_OVERLAY = 'rgba(220, 38, 38, 0.35)';
+const MERGEABLE_OVERLAY = 'rgba(34, 197, 94, 0.45)';
 const FLASH_OVERLAY = 'rgba(255, 255, 255, 0.75)';
 
 export function draw(ctx: CanvasRenderingContext2D, state: GameState, view: ViewState): void {
@@ -51,6 +52,8 @@ function drawTerrain(ctx: CanvasRenderingContext2D, state: GameState): void {
 }
 
 function drawOverlays(ctx: CanvasRenderingContext2D, state: GameState, ui: UiState): void {
+  // While merging, the reachable set is irrelevant — the unit is not going to
+  // move — so only the merge partners are highlighted.
   const reachable = ui.k === 'selected' || ui.k === 'aiming' ? ui.reachable : [];
   ctx.fillStyle = REACHABLE_OVERLAY;
   for (const p of reachable) {
@@ -62,6 +65,14 @@ function drawOverlays(ctx: CanvasRenderingContext2D, state: GameState, ui: UiSta
     for (const targetId of ui.targets) {
       const target = state.units.find(u => u.id === targetId);
       if (target) ctx.fillRect(target.pos.x * TILE_SIZE, target.pos.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+    }
+  }
+
+  if (ui.k === 'merging') {
+    ctx.fillStyle = MERGEABLE_OVERLAY;
+    for (const candidateId of ui.candidates) {
+      const candidate = state.units.find(u => u.id === candidateId);
+      if (candidate) ctx.fillRect(candidate.pos.x * TILE_SIZE, candidate.pos.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
     }
   }
 }
@@ -85,17 +96,21 @@ function drawUnit(ctx: CanvasRenderingContext2D, unit: Unit, flashing: boolean):
   ctx.fillRect(px + inset, py + inset, TILE_SIZE - inset * 2, TILE_SIZE - inset * 2);
   ctx.globalAlpha = 1;
 
+  // A merged unit reads as e.g. 'M2' — the glyph plus how many units are in
+  // it. Its HP bar is scaled by the same factor, so a full bar still means
+  // full strength.
   ctx.fillStyle = '#ffffff';
   ctx.font = 'bold 16px sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(stats.glyph, px + TILE_SIZE / 2, py + TILE_SIZE / 2 - 2);
+  const label = unit.stack > 1 ? `${stats.glyph}${unit.stack}` : stats.glyph;
+  ctx.fillText(label, px + TILE_SIZE / 2, py + TILE_SIZE / 2 - 2);
 
   const barW = TILE_SIZE - inset * 2;
   const barH = 3;
   const bx = px + inset;
   const by = py + TILE_SIZE - inset - barH;
-  const frac = Math.max(0, Math.min(1, unit.hp / stats.maxHp));
+  const frac = Math.max(0, Math.min(1, unit.hp / unitMaxHp(unit)));
   ctx.fillStyle = '#111827';
   ctx.fillRect(bx, by, barW, barH);
   ctx.fillStyle = frac > 0.5 ? '#22c55e' : frac > 0.25 ? '#eab308' : '#ef4444';

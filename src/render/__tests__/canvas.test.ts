@@ -33,7 +33,7 @@ function flatMap(width: number, height: number): GameMap {
 }
 
 function makeUnit(partial: Partial<Unit> & { id: number; owner: 0 | 1 }): Unit {
-  return { type: 'melee', pos: { x: 0, y: 0 }, hp: 10, hasActed: false, ...partial };
+  return { type: 'melee', pos: { x: 0, y: 0 }, hp: 10, hasActed: false, stack: 1, ...partial };
 }
 
 function stateWith(units: Unit[]): GameState {

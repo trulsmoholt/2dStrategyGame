@@ -1,7 +1,7 @@
 import type { Action, GameResult, GameState, Player } from './types';
 import { MAX_TURNS } from './types';
 import { reachableTiles } from './movement';
-import { attackableFrom } from './actions';
+import { attackableFrom, canMerge } from './actions';
 import { resolveAttack } from './combat';
 
 export function checkResult(state: GameState): GameResult | null {
@@ -63,6 +63,31 @@ export function reduce(state: GameState, action: Action): GameState {
       const next: GameState = {
         ...state,
         units: state.units.map(u => (u.id === unit.id ? { ...u, hasActed: true } : u)),
+      };
+      return { ...next, result: checkResult(next) };
+    }
+
+    case 'merge': {
+      const survivor = state.units.find(u => u.id === action.unitId);
+      const absorbed = state.units.find(u => u.id === action.absorbId);
+      if (!survivor) throw new Error(`reduce: no unit with id ${action.unitId}`);
+      if (!absorbed) throw new Error(`reduce: no unit with id ${action.absorbId}`);
+      if (survivor.owner !== state.current) throw new Error('reduce: unit does not belong to the current player');
+      if (!canMerge(survivor, absorbed)) throw new Error('reduce: units cannot be merged');
+
+      // Both units are spent: the absorbed one is gone, the survivor has
+      // acted. No RNG, and the survivor does not move.
+      const merged = {
+        ...survivor,
+        hp: survivor.hp + absorbed.hp,
+        stack: survivor.stack + absorbed.stack,
+        hasActed: true,
+      };
+      const next: GameState = {
+        ...state,
+        units: state.units
+          .filter(u => u.id !== absorbed.id)
+          .map(u => (u.id === survivor.id ? merged : u)),
       };
       return { ...next, result: checkResult(next) };
     }

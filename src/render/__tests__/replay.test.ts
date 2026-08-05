@@ -77,4 +77,35 @@ describe('parseSavedGame validation', () => {
     const text = JSON.stringify({ seed: 1, log: [{ t: 'endTurn' }] });
     expect(parseSavedGame(text)).toEqual({ seed: 1, log: [{ t: 'endTurn' }] });
   });
+
+  it('accepts a well-formed "merge" entry', () => {
+    const log = [{ t: 'merge', unitId: 0, absorbId: 2 }];
+    expect(parseSavedGame(JSON.stringify({ seed: 1, log }))).toEqual({ seed: 1, log });
+  });
+
+  it('rejects a "merge" entry missing unitId or absorbId', () => {
+    const noUnit = JSON.stringify({ seed: 1, log: [{ t: 'merge', absorbId: 2 }] });
+    expect(() => parseSavedGame(noUnit)).toThrow(/\('merge'\) missing numeric unitId/);
+
+    const noAbsorb = JSON.stringify({ seed: 1, log: [{ t: 'merge', unitId: 0 }] });
+    expect(() => parseSavedGame(noAbsorb)).toThrow(/missing numeric absorbId/);
+  });
+});
+
+describe('a saved game containing a merge', () => {
+  // The player can merge but the AI never does (SPEC.md §9.2), so a log with a
+  // merge in it only ever comes from a human game — this is the round trip
+  // that export/import has to survive.
+  const log = [
+    { t: 'merge', unitId: 0, absorbId: 2 },
+    { t: 'endTurn' },
+  ] as const;
+
+  it('survives serialize -> parse -> replay and lands on the merged state', () => {
+    const text = serializeGame(3, [...log]);
+    const state = loadSavedGame(text);
+    const merged = state.units.find(u => u.id === 0)!;
+    expect(merged.stack).toBe(2);
+    expect(state.units.find(u => u.id === 2)).toBeUndefined();
+  });
 });
