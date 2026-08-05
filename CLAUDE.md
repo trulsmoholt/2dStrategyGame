@@ -9,7 +9,8 @@ greedy AI). TypeScript + Vite + Vitest, zero runtime dependencies. The full
 design is specified in [SPEC.md](SPEC.md), and planned-but-unbuilt work in
 [ROADMAP.md](ROADMAP.md) — read SPEC.md before making design decisions; this
 file only covers what it doesn't (commands, and architecture facts that span
-files).
+files). [ABSTRACT.md](ABSTRACT.md) maps the four documents to each other and
+states which one new documentation belongs in.
 
 ## Commands
 
