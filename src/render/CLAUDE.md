@@ -2,11 +2,14 @@
 
 Directory-scoped guidance for `src/render/`. Loaded alongside the root
 [CLAUDE.md](../../CLAUDE.md) when working in this directory — see that file
-for commands and cross-layer architecture. SPEC.md §5 has the intended
-design; this covers what isn't obvious from reading it.
+for commands and cross-layer architecture. SPEC.md §5 holds the handful of
+*decisions* that constrain the renderer (full redraw, input locked during the
+AI turn, why the action panel is HTML); everything below is the
+implementation detail those decisions leave open, and this file — not
+SPEC.md — is where it belongs.
 
-**`ui.ts`'s `UiState.aiming` and `.merging` both carry a `reachable` field
-that SPEC.md's snippet omits.** `onCancel(ui)` takes only a `UiState`, no
+**`ui.ts`'s `UiState.aiming` and `.merging` both carry a `reachable` field.**
+`onCancel(ui)` takes only a `UiState`, no
 `GameState`, so stepping `aiming → selected` or `merging → selected` needs
 the reachable set available on the state itself rather than recomputed from
 the sim. `merging` never *uses* it for drawing — a merging unit isn't going
@@ -63,10 +66,18 @@ toggle: it reads `Cancel merge` and calls `onCancel` while `k === 'merging'`.
 stale or mis-enabled button is a no-op rather than an error.
 
 **Overlays are drawn *under* units, not over them** — `canvas.ts`'s `draw()`
-order is terrain → reachable overlay → attackable overlay → units. Since
+order is terrain → reachable overlay (blue) → attackable overlay (red) →
+merge-candidate overlay (green) → units → HP bars → hit flashes → status
+text. Since
 each unit's fill is inset only 3px and nearly opaque, the reachable/
 attackable tint is visible only as a thin border ring around units standing
 on a highlighted tile. That's intentional, not a rendering bug.
+
+**A merged unit renders as its glyph plus its stack — `M2`, not `M`** — and
+its HP bar is divided by `unitMaxHp(unit)`, not the type's `maxHp`, so a full
+bar still means full strength. Using the table's `maxHp` here would paint a
+20 HP merged unit as a permanently-full bar; that's the renderer-side face of
+the `unitMaxHp`/`unitPower` rule in the root CLAUDE.md.
 
 **Per-unit dimming reflects `hasActed`, not "did something this turn."**
 `reduce`'s `endTurn` marks *every* remaining unit of the outgoing player as

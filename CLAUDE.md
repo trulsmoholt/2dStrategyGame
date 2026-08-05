@@ -6,9 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A minimal 2D turn-based tactics game (5v5, fixed 16×16 grid, player vs. a
 greedy AI). TypeScript + Vite + Vitest, zero runtime dependencies. The full
-design is specified in [SPEC.md](SPEC.md) — read it before making design
-decisions; this file only covers what SPEC.md doesn't (commands, and
-architecture facts that span files).
+design is specified in [SPEC.md](SPEC.md), and planned-but-unbuilt work in
+[ROADMAP.md](ROADMAP.md) — read SPEC.md before making design decisions; this
+file only covers what it doesn't (commands, and architecture facts that span
+files).
 
 ## Commands
 
@@ -55,9 +56,9 @@ proof across 100 seeds.
 
 **`src/ai/ai.ts` never merges**, by measurement rather than oversight — every
 heuristic tried cost it ~15 points of win rate on `MAP_STANDARD`, because
-merging's cost is immediate and its payoff is positional. SPEC.md §9.2 has
-the numbers and the condition to re-test under (a map with chokepoints).
-Don't add one back without re-running that comparison.
+merging's cost is immediate and its payoff is positional. SPEC.md §4 has the
+numbers, and ROADMAP.md the condition to re-test under (a map with
+chokepoints). Don't add one back without re-running that comparison.
 
 **`src/ai/ai.ts` never rolls randomness.** It scores actions with
 `expectedDamage` (deterministic, = unit power) instead of the real dice roll,
@@ -92,11 +93,11 @@ on a countered one — tested explicitly in `combat.test.ts`.
 types.** Any code that branches on `UnitTypeId` outside that file is
 considered a bug (per SPEC.md §3.3) — stats should be looked up, not
 switched on. That now includes *comparing* two units' types: use
-`mergeKind(a, b)` rather than `a.type === b.type`, so cargo (SPEC.md §9.3)
+`mergeKind(a, b)` rather than `a.type === b.type`, so cargo (ROADMAP.md)
 can extend the dispatch in one place.
 
 **Merging means two stats are per-unit, not per-type.** A merged unit carries
-`stack > 1` (SPEC.md §9.2), and `maxHp` and `power` scale with it. Read them
+`stack > 1` (SPEC.md §3.7), and `maxHp` and `power` scale with it. Read them
 via `unitMaxHp(u)` / `unitPower(u)` from `units.ts`; reaching for
 `UNIT_STATS[u.type].maxHp` or `.power` silently ignores `stack` and is a bug.
 `mp`, `range` and `glyph` are unaffected by merging and are still read
@@ -106,10 +107,11 @@ single unit type and `movement.ts` and `actions.ts` needed no changes.
 scaling for free and never reads either stat directly.
 
 **`src/render/` has its own [CLAUDE.md](src/render/CLAUDE.md)** for
-renderer-internal gotchas (event wiring, dimming/flash rules, draw order,
-the `UiState.aiming` deviation from SPEC.md's snippet). It's loaded
-automatically when working in that directory; this file sticks to facts
-that span layers.
+renderer-internal gotchas (event wiring, dimming/flash rules, draw order, the
+action panel, the `reachable` field `UiState` carries). SPEC.md §5 keeps only
+the decisions that constrain the renderer. The directory file is loaded
+automatically when working there; this file sticks to facts that span
+layers.
 
 ## Status
 
@@ -123,9 +125,9 @@ Escape-to-cancel, AI turn stepping, a loss banner, and New Game reseeding
 onto the same map). A win and a draw banner were exercised only via
 `canvas.test.ts`'s unit test, not manually in-browser.
 
-**Merging (SPEC.md §9.2) is built** — the first piece of V2. Two adjacent
-same-type friendly units combine into one with summed HP and `stack`, scaling
-maxHp and power. It is the answer to concentration of force *instead of*
+**Merging (SPEC.md §3.7) is built** — the first piece of the ROADMAP.md work.
+Two adjacent same-type friendly units combine into one with summed HP and
+`stack`, scaling maxHp and power. It is the answer to concentration of force *instead of*
 stacking, so the one-unit-per-tile invariant that `unitAt`, `reachableTiles`
 occupancy and ZoC all rely on stays intact. The player drives it from the
 HTML action panel; the AI does not use it (see above).

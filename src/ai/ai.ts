@@ -1,7 +1,7 @@
 import type { Action, GameState, Pos, Unit, UnitId } from '../sim/index';
 import { attackableFrom, chebyshev, expectedDamage, reachableTiles, UNIT_STATS } from '../sim/index';
 
-// The AI never merges — deliberately, and measured. See SPEC.md §9.2: the
+// The AI never merges — deliberately, and measured. See SPEC.md §4: the
 // heuristics tried cost it ~15 percentage points of win rate over 300 seeds,
 // because merging's cost (a full turn of offence, plus a body's worth of zone
 // of control) is immediate while its payoff (taking one counterattack per turn

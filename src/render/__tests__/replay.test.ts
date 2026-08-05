@@ -93,7 +93,7 @@ describe('parseSavedGame validation', () => {
 });
 
 describe('a saved game containing a merge', () => {
-  // The player can merge but the AI never does (SPEC.md §9.2), so a log with a
+  // The player can merge but the AI never does (SPEC.md §4), so a log with a
   // merge in it only ever comes from a human game — this is the round trip
   // that export/import has to survive.
   const log = [

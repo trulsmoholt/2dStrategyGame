@@ -13,7 +13,7 @@ export const UNIT_STATS: Record<UnitTypeId, UnitStats> = {
   ranged: { maxHp:  6, power: 3, mp: 2, range: 2, glyph: 'R' },
 };
 
-// The two stats merging scales (SPEC.md §9.2). Reading UNIT_STATS[u.type].maxHp
+// The two stats merging scales (SPEC.md §3.7). Reading UNIT_STATS[u.type].maxHp
 // or .power for a *unit* anywhere outside this file is a bug — it silently
 // ignores `stack`. mp, range and glyph are unaffected by merging, so those are
 // still read straight from the table.
@@ -30,7 +30,7 @@ export type MergeKind = 'stack';
 // The single dispatch point for "can these two combine, and into what". Type
 // compatibility only — callers own the situational rules (ownership,
 // adjacency, hasActed, MAX_STACK). Kept here rather than inlined as
-// `a.type === b.type` at the call site so that cargo (SPEC.md §9.3) can add a
+// `a.type === b.type` at the call site so that cargo (ROADMAP.md) can add a
 // 'load' result without a UnitTypeId comparison leaking outside this file.
 export function mergeKind(a: Unit, b: Unit): MergeKind | null {
   return a.type === b.type ? 'stack' : null;

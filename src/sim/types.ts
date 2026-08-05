@@ -14,7 +14,7 @@ export interface Unit {
   readonly hasActed: boolean;
   // How many units of `type` are merged into this one; 1 for an unmerged
   // unit. Scales maxHp and power only — never mp, range or glyph, which is
-  // why merging is restricted to a single type. See SPEC.md §9.2.
+  // why merging is restricted to a single type. See SPEC.md §3.7.
   readonly stack: number;
 }
 
