@@ -97,7 +97,7 @@ describe('a saved game containing a merge', () => {
   // merge in it only ever comes from a human game — this is the round trip
   // that export/import has to survive.
   const log = [
-    { t: 'merge', unitId: 0, absorbId: 2 },
+    { t: 'merge', unitId: 0, absorbId: 1 },
     { t: 'endTurn' },
   ] as const;
 
@@ -106,6 +106,6 @@ describe('a saved game containing a merge', () => {
     const state = loadSavedGame(text);
     const merged = state.units.find(u => u.id === 0)!;
     expect(merged.stack).toBe(2);
-    expect(state.units.find(u => u.id === 2)).toBeUndefined();
+    expect(state.units.find(u => u.id === 1)).toBeUndefined();
   });
 });

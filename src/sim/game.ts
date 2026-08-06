@@ -1,13 +1,13 @@
 import type { Action, GameState } from './types';
 import { seedRng } from './rng';
 import { parseMap } from './map';
-import { MAP_STANDARD } from './maps';
+import { MAP_NORTHERN_NORWAY } from './maps';
 import { reduce, checkResult } from './reduce';
 
 export { checkResult };
 
 export function newGame(seed: number): GameState {
-  const { map, units } = parseMap(MAP_STANDARD);
+  const { map, units } = parseMap(MAP_NORTHERN_NORWAY);
   const state: GameState = {
     map,
     units,

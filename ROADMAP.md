@@ -6,16 +6,15 @@ SPEC.md and its entry disappears from this file.
 
 Goal: a larger, geographically-inspired map with water, and unit types that
 use it (ships, planes). Every phase ends with a green `npm test` and a
-playable game; the current 16×16 board stays playable throughout.
+playable game; the currently-shipped map stays playable throughout.
 
 ## Phase order
 
 | # | Change |
 | --- | --- |
 | 1 | Map format: terrain layer separate from the unit roster; multiple maps |
-| 2 | Path-distance AI seek **and** the Northern Norway map, together |
-| 3 | Ship and plane unit types; cargo (below) |
-| 4 | Victory conditions and turn-cap retune |
+| 2 | Ship and plane unit types; cargo (below) |
+| 3 | Victory conditions and turn-cap retune |
 
 Merging (SPEC.md §3.7) was the first piece of this work and is built. It was
 independent of everything above, which is why it landed first. The renderer
@@ -31,27 +30,24 @@ is why it landed ahead of it; ships and planes are unblocked now that the
 domain table exists (they're stat-table rows plus a `domain`, not hardcoded
 special cases).
 
-One ordering constraint is not negotiable:
+Path-distance AI seek and the Northern Norway map are also built, together,
+as the ordering constraint below required. `src/ai/ai.ts`'s seek phase now
+minimises a Dijkstra distance field over passable terrain (`distanceField`,
+SPEC.md §3.5) instead of Chebyshev distance, and `newGame` plays
+`MAP_NORTHERN_NORWAY` (SPEC.md §3.4), a 20×16 map whose water strait ends
+the old map's 180°-rotational symmetry. The self-play fairness assertion
+(SPEC.md §8) is now a win-rate band rather than a presence check, as this
+landing anticipated.
 
-- **Phase 2 is one phase, not two.** The seek phase in `ai.ts` minimises
-  Chebyshev distance to the nearest enemy (SPEC.md §4). On a coastline that
-  walks land units to the shore and strands them opposite an enemy they can
-  never path to — every game becomes a turn-cap draw. The seek phase must move
-  to a Dijkstra distance field over passable terrain in the same change that
-  introduces the map.
-
-Phase 2 also ends the map's 180°-rotational symmetry, which is what currently
-makes "both sides win at least once" (SPEC.md §8) a meaningful fairness check.
-Balance moves to asymmetric rosters, and the self-play assertion becomes a
-win-rate band rather than a presence check.
-
-**Re-test the AI merge heuristic when phase 2 lands.** SPEC.md §4 has the
-measurements showing every heuristic tried costs ~15 points of win rate on the
-current open map, because merging forfeits an attack every turn plus a body's
-worth of zone of control. A one-tile chokepoint inverts that: the second unit
-cannot attack anyway and its ZoC is redundant, so merging costs nothing.
-`applyExpected` already handles the action, so only `chooseUnitAction` needs
-to change.
+**Re-test the AI merge heuristic — now unblocked, not yet done.**
+`MAP_NORTHERN_NORWAY`'s row 11 is a one-tile-tall causeway: SPEC.md §4 has
+the measurements showing every merge heuristic tried on the old open map
+cost ~15 points of win rate, because merging forfeits an attack every turn
+plus a body's worth of zone of control — but at a chokepoint the second unit
+often can't attack anyway and its ZoC is redundant, so merging may cost
+nothing there. This wasn't re-tested as part of landing the map (out of
+scope for that change); `applyExpected` in `ai.ts` already handles the
+`merge` action, so only `chooseUnitAction` needs to change to try it.
 
 ## Cargo — designed for, not built
 
@@ -78,5 +74,6 @@ Two decisions are recorded now so the later change stays additive:
 Still to build when cargo lands: an unload action (it targets a *tile*, so it
 needs its own `UiState` variant and its own panel button, plus a rule for
 whose turn it spends), and AI handling — an AI that loads but never unloads
-strands its own army at sea, which is the same failure family as the
-Chebyshev-seek problem in phase 2.
+strands its own army at sea, which is the same failure family the old
+Chebyshev-seek bug was: a unit "closest" to its goal with no legal way to
+actually get there.

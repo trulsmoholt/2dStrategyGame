@@ -12,12 +12,12 @@ export { seedRng, nextRng, rollInt } from './rng';
 export type { UnitStats, MergeKind } from './units';
 export { UNIT_STATS, unitMaxHp, unitPower, mergeKind } from './units';
 
-export { MAP_STANDARD } from './maps';
+export { MAP_STANDARD, MAP_NORTHERN_NORWAY } from './maps';
 
 export type { ParsedMap } from './map';
 export { parseMap, inBounds, terrainAt, chebyshev, terrainCost } from './map';
 
-export { unitAt, inEnemyZoc, reachableTiles } from './movement';
+export { unitAt, inEnemyZoc, reachableTiles, distanceField, distanceAt } from './movement';
 
 export { expectedDamage, resolveAttack } from './combat';
 

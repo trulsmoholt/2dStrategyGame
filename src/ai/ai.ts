@@ -1,5 +1,8 @@
 import type { Action, GameState, Pos, Unit, UnitId } from '../sim/index';
-import { attackableFrom, chebyshev, expectedDamage, reachableTiles, UNIT_STATS } from '../sim/index';
+import {
+  attackableFrom, chebyshev, distanceAt, distanceField, expectedDamage, reachableTiles,
+  UNIT_STATS,
+} from '../sim/index';
 
 // The AI never merges — deliberately, and measured. See SPEC.md §4: the
 // heuristics tried cost it ~15 percentage points of win rate over 300 seeds,
@@ -58,12 +61,16 @@ function chooseUnitAction(state: GameState, unit: Unit): Action {
   }
 
   // Seek phase: no attack is reachable this turn. Move toward the nearest
-  // living enemy; ties broken by lowest (y, x) since `destinations` is sorted.
+  // living enemy by path distance over the mover's domain (not straight-line
+  // Chebyshev distance), so a coastline or wall can't strand a unit that has
+  // no legal route to the enemy it's "closest" to as the crow flies. Ties
+  // broken by lowest (y, x) since `destinations` is sorted.
   const enemies = state.units.filter(u => u.owner !== unit.owner);
+  const field = distanceField(state.map, enemies.map(e => e.pos), UNIT_STATS[unit.type].domain);
   let bestDist = Infinity;
   let bestDest: Pos = unit.pos;
   for (const to of destinations) {
-    const dist = enemies.reduce((min, e) => Math.min(min, chebyshev(to, e.pos)), Infinity);
+    const dist = distanceAt(state.map, field, to);
     if (dist < bestDist) {
       bestDist = dist;
       bestDest = to;

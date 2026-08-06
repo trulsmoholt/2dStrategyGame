@@ -10,8 +10,9 @@ on it.
 
 ## 1. Design summary
 
-A 5v5 tactical skirmish on a fixed 16×16 grid. You play Player 0 against a
-greedy AI. Units move and attack once per turn; last army standing wins.
+A 5v5 tactical skirmish on a fixed 20×16 grid, split by a water strait. You
+play Player 0 against a greedy AI. Units move and attack once per turn;
+last army standing wins.
 
 | Decision | Choice |
 | --- | --- |
@@ -24,9 +25,9 @@ greedy AI. Units move and attack once per turn; last army standing wins.
 | Stacking | One unit per tile — concentration of force is via merging (§3.7) |
 | Zone of control | Entering a tile adjacent to an enemy halts movement — no exceptions |
 | Geometry | 8-way movement, Chebyshev distance, diagonals always legal |
-| Roster | 2 unit types, 2 terrain types (data-driven, designed to grow) |
-| Map | One hardcoded 16×16 ASCII map, 180°-rotationally symmetric |
-| AI | Two-phase per unit: fight if a target is reachable, else seek |
+| Roster | 2 unit types, 4 terrain types (data-driven, designed to grow) |
+| Map | One hardcoded 20×16 ASCII map, coastline (water) splits the two sides, not 180°-symmetric |
+| AI | Two-phase per unit: fight if a target is reachable, else seek by path distance |
 | Input | Click unit → click destination → click target |
 | Renderer | Canvas 2D, full redraw, AI actions stepped ~400 ms apart |
 | Art | Rectangles, HP bars, hit flash. Zero assets. |
@@ -38,8 +39,12 @@ greedy AI. Units move and attack once per turn; last army standing wins.
   lines will be very sticky, and a ranged unit (2 MP) that gets into contact
   effectively has 1 MP until the enemy dies. This is the intended cost of
   the choice; if it plays badly, the tuning lever is ranged MP, not the rule.
-- **Diagonals are porous at corners.** A 1-tile-thick wall does not seal.
-  Every wall on the shipped map is therefore ≥2 tiles thick.
+- **Diagonals are porous at corners.** A 1-tile-thick impassable obstacle
+  (wall or water) does not seal — passability depends only on the
+  destination tile, never on the two flanking tiles of a diagonal step.
+  Every wall or water gap on the shipped map is therefore ≥2 tiles thick,
+  except the single land causeway `MAP_NORTHERN_NORWAY` places deliberately
+  (§3.4) — that gap is meant to be crossed, not sealed.
 - **Draw-only turn cap.** A side that is ahead on HP at turn 50 gets nothing.
   The AI seek phase exists specifically so this is a backstop, not a routine
   outcome; the self-play test asserts draws are rare.
@@ -118,30 +123,41 @@ for a *unit* anywhere else is a bug for the same reason: it silently ignores
 
 ### 3.4 Maps — `src/sim/map.ts` and `maps.ts`
 
-`parseMap` assigns unit ids in reading order from 0. ASCII legend: `.` plain,
-`#` wall, `m`/`r` Player 0 melee/ranged, `M`/`R` Player 1 melee/ranged.
+`parseMap` assigns unit ids in reading order from 0. ASCII legend: `.`
+plain, `#` wall, `~` rough, `w` water, `m`/`r` Player 0 melee/ranged, `M`/`R`
+Player 1 melee/ranged.
 
-`MAP_STANDARD` in `maps.ts` — 16×16, 180°-rotationally symmetric, all walls
-2 tiles thick:
+`newGame` plays `MAP_NORTHERN_NORWAY` — 20×16, deliberately **not**
+180°-rotationally symmetric. A vertical water strait splits a west
+landmass (Player 0) from an east landmass (Player 1); every row has a
+water gap except row 11, which is land end-to-end and is therefore the
+only place a land unit can cross:
 
 ```
-..m.r...........
-.m..............
-m.......##......
-.r......##......
-........##......
-....##..........
-....##..........
-....##..........
-..........##....
-..........##....
-..........##....
-......##........
-......##......R.
-......##.......M
-..............M.
-...........R.M..
+......wwwwwww.......
+.......wwwww........
+.....~..wwww........
+..m.....wwwww.......
+...m...wwwwww....M..
+....r..wwwwwww......
+......wwwwwwww.R....
+......wwwwwww.......
+.......wwwwww...M...
+....r...wwww........
+........wwww...R....
+....................
+..m.....wwww.....M..
+.......wwwwww.~.....
+......wwwwwww.......
+.....wwwwwwwww......
 ```
+
+`MAP_STANDARD` (the original 16×16, 180°-rotationally symmetric map, all
+walls 2 tiles thick) still exists in `maps.ts` and is still exported —
+`src/sim/__tests__/movement.test.ts` and other tests that want a simple,
+obstacle-free fixture use hand-built maps of their own rather than either
+named map, but nothing stops a caller from parsing `MAP_STANDARD` directly.
+It is no longer what `newGame` plays.
 
 `parseMap` throws on: non-rectangular input, unknown characters, or a unit
 count other than 3 melee + 2 ranged per side. A malformed map is a
@@ -180,12 +196,23 @@ without needing a stable sort.
 
 `Terrain` has four members: `plain` (cost 1 to `land`), `wall` (impassable
 to everything built so far), `rough` (cost 2, still `land`-passable), and
-`water` (impassable to `land`, passable to `sea`). Only `plain`/`wall`
-appear on `MAP_STANDARD` today — `rough`/`water` exist so the cost table and
-domain restriction are exercised by tests ahead of the map that will
-actually place them (ROADMAP.md). `sea`/`air` domain costs have no unit to
-exercise them yet; see the comment on `TERRAIN_COST` in `map.ts` for their
-placeholder values.
+`water` (impassable to `land`, passable to `sea`). All four appear on
+`MAP_NORTHERN_NORWAY`. `sea`/`air` domain costs have no unit to exercise
+them yet (ROADMAP.md phase 3); see the comment on `TERRAIN_COST` in
+`map.ts` for their placeholder values.
+
+**`distanceField`, also in `movement.ts`, is a related but separate
+function**: multi-source Dijkstra (the same Dial's-algorithm bucket-queue
+approach as `reachableTiles`) giving distance-to-nearest-source at every
+tile on the board, for a given domain. Unlike `reachableTiles` it has no
+`mp` cap and no ZoC-termination or occupancy check — it answers "how far is
+it to walk here, ignoring who's standing where," not "can this specific
+unit legally end its turn here." It exists for the AI's seek phase (§4):
+without it, "nearest enemy" would mean straight-line Chebyshev distance,
+which a coastline can turn into a promise the unit can't keep.
+`distanceAt(map, field, pos)` reads one tile out of the flat, row-major
+array `distanceField` returns; `Infinity` means unreachable for that
+domain.
 
 ### 3.6 Combat — `src/sim/combat.ts`
 
@@ -338,9 +365,22 @@ Take the max; break ties by lowest `(y, x)` destination, then lowest target
 id. Deterministic by construction.
 
 **Seek phase.** If no attack is possible, move to the reachable tile
-minimising `min over living enemies of chebyshev(dest, enemy.pos)`. Ties
+minimising path distance to the nearest living enemy — `distanceField`
+(§3.5) over the mover's domain, seeded from every living enemy position at
+once, recomputed fresh for each unit's turn (a fight-phase kill earlier in
+the same `chooseTurn` shrinks the enemy set for units that act later). Ties
 break by lowest `(y, x)`. If the best tile is the unit's current tile, emit
 `{ t: 'wait' }` instead so the log stays clean.
+
+This replaced a straight-line Chebyshev-distance version of the same
+heuristic. On an open, obstacle-free board the two are identical, which is
+why `src/ai/__tests__/ai.test.ts`'s seek tests (hand-built flat maps) never
+needed to change. On `MAP_NORTHERN_NORWAY`'s coastline they diverge: a unit
+"closest" to an enemy by straight-line distance can be on the wrong side of
+the strait with no legal route there at all, which is exactly the failure
+ROADMAP.md flagged — Chebyshev seek would walk land units to the shore and
+strand them, turning every game into a turn-cap draw. Path-distance seek
+routes them to the one-row causeway instead.
 
 The explicit seek branch is what prevents the "every move scores 0, the AI
 stands still, everything is a Draw at turn 50" failure. It is a separate code
@@ -454,7 +494,17 @@ Unit tests (`src/sim/__tests__/`):
 - `movement.test.ts` — on hand-written tiny maps: walls block; occupied tiles
   block; ZoC tiles are **entered but not expanded**; a unit starting in ZoC
   can still move its full MP away; a diagonal gap between two wall corners is
-  passable; a 2-thick wall is not; `reachableTiles` is sorted.
+  passable; a 2-thick wall is not; `reachableTiles` is sorted. Also covers
+  `distanceField`/`distanceAt`: correct step distance from a single source,
+  nearest-of-multiple-sources, routing around impassable terrain rather than
+  cutting through it, `Infinity` for domain-unreachable tiles, and the
+  `land`-vs-`sea` cost asymmetry over water.
+- `map.test.ts` — `parseMap`'s `~`/`w` legend characters; an unrecognized
+  character still throws; `MAP_NORTHERN_NORWAY` parses to the right
+  dimensions and roster counts, isn't 180°-symmetric, and its causeway
+  actually connects a Player 0 and a Player 1 unit for the `land` domain
+  (via `distanceField`) — the one hard requirement the map's legality rests
+  on.
 - `combat.test.ts` — damage never below 1; a dead defender never counters; a
   range-2 attacker hitting a range-1 defender from distance 2 takes no
   counter; melee at range 1 trade both ways; the RNG advances exactly once on
@@ -494,7 +544,8 @@ for (let seed = 0; seed < 100; seed++) {
     .toBe(final.units.length);                  // never two units on a tile
   for (const u of final.units) {
     expect(u.hp).toBeGreaterThan(0);            // dead units are removed
-    expect(terrainAt(final.map, u.pos)).toBe('plain');
+    const terrain = terrainAt(final.map, u.pos);
+    expect(terrain === 'plain' || terrain === 'rough').toBe(true);
   }
 }
 ```
@@ -504,8 +555,17 @@ Plus, across those 100 games:
 - **Draws are rare:** at most 10 of 100 end in `'draw'`. This is the real
   test of the AI seek phase — if seeking is broken, armies never meet and
   this assertion fails loudly rather than the game merely feeling dull.
-- **Both sides can win:** `'p0'` and `'p1'` each appear at least once, so the
-  map and the AI are not trivially biased.
+- **Win rate falls in a band, not a presence check:** `MAP_NORTHERN_NORWAY`
+  isn't 180°-rotationally symmetric (unlike `MAP_STANDARD`), so "both sides
+  win at least once" stopped being a meaningful fairness check — a single
+  win for the weaker side would pass it while a real regression that skews
+  the AI further could still slip through. The test instead asserts
+  `p0WinRate` (fraction of the 100 games Player 0 wins) falls strictly
+  between 0.2 and 0.6 — wide enough to tolerate the map's real, measured
+  asymmetry (~38% observed) and future minor AI-scoring tweaks, narrow
+  enough to still catch a broken fight/seek phase collapsing toward 0%,
+  100%, or all-draws. Balance is now ROADMAP.md's job for asymmetric
+  rosters (phase 3+), not this map's terrain.
 - **Determinism under re-run:** `playOut(newGame(seed), chooseAction)` run
   twice for the same seed produces identical logs — proving `chooseTurn` is
   pure and consumes no randomness.
@@ -524,10 +584,12 @@ npm run dev
 
 Then, in one sitting, confirm all of the following:
 
-1. The board renders: 16×16 grid, two 2-thick wall clusters, 5 blue units
-   bottom-left, 5 red top-right, HP bars visible.
+1. The board renders: 20×16 grid, a water strait down the middle with one
+   land causeway crossing it, 5 blue units on the west landmass, 5 red units
+   on the east landmass, HP bars visible.
 2. Click a melee unit → its reachable tiles highlight, and the highlight
-   **stops** at tiles adjacent to a red unit rather than flowing past them.
+   **stops** at the water's edge (same as it does at a wall) and at tiles
+   adjacent to a red unit rather than flowing past them.
 3. Move that unit adjacent to a red unit, then click the red unit → both take
    damage, both flash, both HP bars drop.
 4. Move a ranged unit to exactly distance 2 from a red melee unit and shoot →

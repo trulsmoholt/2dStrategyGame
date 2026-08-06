@@ -18,8 +18,8 @@ const OWNER_COLOR: Record<0 | 1, string> = { 0: '#2563eb', 1: '#dc2626' };
 const TERRAIN_COLOR: Record<Terrain, string> = {
   plain: '#e8f5e9',
   wall: '#374151',
-  rough: '#c9b458',   // never rendered from MAP_STANDARD today
-  water: '#60a5fa',   // never rendered from MAP_STANDARD today
+  rough: '#c9b458',
+  water: '#60a5fa',
 };
 const REACHABLE_OVERLAY = 'rgba(37, 99, 235, 0.28)';
 const ATTACKABLE_OVERLAY = 'rgba(220, 38, 38, 0.35)';
