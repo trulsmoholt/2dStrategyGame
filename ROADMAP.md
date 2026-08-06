@@ -22,8 +22,13 @@ playable game; the current 16×16 board stays playable throughout.
       `domain`. Independent of phase 2's AI/map work, so it landed first —
       ships and planes are now unblocked (stat-table rows plus a `domain`,
       not hardcoded special cases).
-- [ ] **Phase 1** — Map format: terrain layer separate from the unit roster;
-      multiple maps.
+- [x] **Phase 1** — Map format: terrain layer separate from the unit roster;
+      multiple maps. `parseMap` is gone; `src/sim/map.ts` now has
+      `parseTerrain`, `buildRoster`, and `loadMap`, and `src/sim/maps.ts` is
+      a registry (`getMapDef`) that `newGame`/`replay` look up by an
+      optional `mapId`. Only `standard` is registered — this landed the
+      mechanism multiple maps need, not a second map's content; the
+      Northern Norway map itself is still phase 2's job below.
 - [ ] **Phase 2** — Path-distance AI seek **and** the Northern Norway map,
       together. Must land as one change, not two — see below.
 - [ ] **Phase 3** — Ship and plane unit types; cargo — see below.

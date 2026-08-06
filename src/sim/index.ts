@@ -2,7 +2,7 @@
 
 export type {
   Player, UnitId, UnitTypeId, Domain, Terrain, Pos, Unit, GameMap, GameResult,
-  GameState, Action,
+  GameState, Action, RosterEntry, MapId, MapDef,
 } from './types';
 export { MAX_TURNS, MAX_STACK, MIN_DAMAGE, DAMAGE_ROLL_MIN, DAMAGE_ROLL_MAX } from './types';
 
@@ -12,10 +12,10 @@ export { seedRng, nextRng, rollInt } from './rng';
 export type { UnitStats, MergeKind } from './units';
 export { UNIT_STATS, unitMaxHp, unitPower, mergeKind } from './units';
 
-export { MAP_STANDARD } from './maps';
+export { MAP_STANDARD, MAP_STANDARD_ID, getMapDef } from './maps';
 
 export type { ParsedMap } from './map';
-export { parseMap, inBounds, terrainAt, chebyshev, terrainCost } from './map';
+export { loadMap, parseTerrain, buildRoster, inBounds, terrainAt, chebyshev, terrainCost } from './map';
 
 export { unitAt, inEnemyZoc, reachableTiles } from './movement';
 

@@ -25,6 +25,20 @@ export interface GameMap {
   readonly tiles: readonly Terrain[];   // row-major, length width*height
 }
 
+export interface RosterEntry {
+  readonly type: UnitTypeId;
+  readonly owner: Player;
+  readonly pos: Pos;
+}
+
+export type MapId = string;
+
+export interface MapDef {
+  readonly id: MapId;
+  readonly terrain: string;              // ASCII, parseTerrain's grammar only
+  readonly roster: readonly RosterEntry[];
+}
+
 export type GameResult = 'p0' | 'p1' | 'draw';
 
 export interface GameState {
