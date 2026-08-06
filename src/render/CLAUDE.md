@@ -8,6 +8,14 @@ AI turn, why the action panel is HTML); everything below is the
 implementation detail those decisions leave open, and this file — not
 SPEC.md — is where it belongs.
 
+**Canvas pixel dimensions are derived from `state.map`, not fixed.**
+`canvas.ts`'s `canvasWidth`/`canvasHeight`/`boardWidthPx`/`boardHeightPx`
+take a `GameMap` and multiply its `width`/`height` by `TILE_SIZE`; there is
+no `GRID` constant. `main.ts` calls `resizeCanvas()` — which reads
+`state.map` — every time `state` is replaced wholesale (module init, New
+Game, Import), never on every `render()`, since the map never changes
+mid-game.
+
 **`ui.ts`'s `UiState.aiming` and `.merging` both carry a `reachable` field.**
 `onCancel(ui)` takes only a `UiState`, no
 `GameState`, so stepping `aiming → selected` or `merging → selected` needs

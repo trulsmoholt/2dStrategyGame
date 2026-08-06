@@ -2,7 +2,7 @@ import type { Action, GameState, UnitId } from '../sim/index';
 import { newGame, reduce, replay } from '../sim/index';
 import { chooseTurn } from '../ai/ai';
 import type { ViewState } from './canvas';
-import { CANVAS_HEIGHT, CANVAS_WIDTH, draw } from './canvas';
+import { canvasHeight, canvasWidth, draw } from './canvas';
 import type { UiState } from './ui';
 import { mergeCandidates, onCancel, onMerge, onTileClick, pixelToTile } from './ui';
 import { parseSavedGame, serializeGame } from './replay';
@@ -11,8 +11,6 @@ const FLASH_MS = 180;
 const AI_STEP_MS = 400;
 
 const canvas = document.getElementById('board') as HTMLCanvasElement;
-canvas.width = CANVAS_WIDTH;
-canvas.height = CANVAS_HEIGHT;
 const rawCtx = canvas.getContext('2d');
 if (!rawCtx) throw new Error('main: 2D canvas context unavailable');
 const ctx: CanvasRenderingContext2D = rawCtx;
@@ -22,6 +20,16 @@ let state: GameState = newGame(seed);
 let ui: UiState = { k: 'idle' };
 let flashes: { unitId: UnitId; until: number }[] = [];
 let actionLog: Action[] = [];
+
+// The map's size only ever changes when `state` is replaced wholesale (New
+// Game, Import) — never mid-game — so this is called at those points only,
+// not on every render().
+function resizeCanvas(): void {
+  canvas.width = canvasWidth(state.map);
+  canvas.height = canvasHeight(state.map);
+}
+
+resizeCanvas();
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -143,6 +151,7 @@ document.getElementById('new-game')?.addEventListener('click', () => {
   ui = { k: 'idle' };
   flashes = [];
   actionLog = [];
+  resizeCanvas();
   render();
 });
 
@@ -166,6 +175,7 @@ document.getElementById('import-btn')?.addEventListener('click', () => {
     flashes = [];
     ui = state.result ? { k: 'over', result: state.result } : { k: 'idle' };
     if (importError) importError.textContent = '';
+    resizeCanvas();
     render();
   } catch (err) {
     if (importError) importError.textContent = err instanceof Error ? err.message : String(err);

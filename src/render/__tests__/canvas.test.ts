@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { GameMap, GameState, Terrain, Unit } from '../../sim/index';
 import { seedRng } from '../../sim/index';
-import { BOARD_PX, CANVAS_HEIGHT, CANVAS_WIDTH, STATUS_H, draw } from '../canvas';
+import { STATUS_H, boardHeightPx, boardWidthPx, canvasHeight, canvasWidth, draw } from '../canvas';
 import type { ViewState } from '../canvas';
 
 // A minimal stand-in for CanvasRenderingContext2D: no jsdom/canvas package
@@ -41,10 +41,20 @@ function stateWith(units: Unit[]): GameState {
 }
 
 describe('draw', () => {
-  it('exposes the documented canvas dimensions', () => {
-    expect(CANVAS_WIDTH).toBe(512);
-    expect(BOARD_PX).toBe(512);
-    expect(CANVAS_HEIGHT).toBe(BOARD_PX + STATUS_H);
+  it('derives canvas dimensions from the map, not a fixed constant', () => {
+    const map16 = flatMap(16, 16);
+    expect(canvasWidth(map16)).toBe(512);
+    expect(boardWidthPx(map16)).toBe(512);
+    expect(canvasHeight(map16)).toBe(boardHeightPx(map16) + STATUS_H);
+
+    // A differently-sized, non-square map must scale independently on each
+    // axis — this is the regression test for the renderer no longer
+    // silently assuming a fixed 16x16 board.
+    const map = flatMap(10, 20);
+    expect(boardWidthPx(map)).toBe(10 * 32);
+    expect(boardHeightPx(map)).toBe(20 * 32);
+    expect(canvasWidth(map)).toBe(10 * 32);
+    expect(canvasHeight(map)).toBe(20 * 32 + STATUS_H);
   });
 
   it('paints every terrain tile plus the status strip, and does not throw, for each UI state', () => {
@@ -68,6 +78,15 @@ describe('draw', () => {
       expect(calls.fillRect).toBeGreaterThan(16 * 16);
       expect(calls.fillText.length).toBeGreaterThan(0);   // glyphs + status text
     }
+  });
+
+  it('renders a non-square map without throwing', () => {
+    const map = flatMap(10, 20);
+    const state: GameState = { map, units: [], current: 0, turn: 1, rng: seedRng(1), result: null };
+    const { ctx, calls } = fakeCtx();
+    const view: ViewState = { ui: { k: 'idle' }, flashes: [] };
+    expect(() => draw(ctx, state, view)).not.toThrow();
+    expect(calls.fillRect).toBeGreaterThan(10 * 20);
   });
 
   it('status text reflects the result banner when the game is over', () => {

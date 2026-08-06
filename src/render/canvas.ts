@@ -1,13 +1,13 @@
-import type { GameState, Unit, UnitId } from '../sim/index';
+import type { GameMap, GameState, Unit, UnitId } from '../sim/index';
 import { UNIT_STATS, terrainAt, unitMaxHp } from '../sim/index';
 import type { UiState } from './ui';
 import { TILE_SIZE } from './ui';
 
-export const GRID = 16;
-export const BOARD_PX = TILE_SIZE * GRID;   // 512
 export const STATUS_H = 32;
-export const CANVAS_WIDTH = BOARD_PX;
-export const CANVAS_HEIGHT = BOARD_PX + STATUS_H;
+export const boardWidthPx = (map: GameMap): number => map.width * TILE_SIZE;
+export const boardHeightPx = (map: GameMap): number => map.height * TILE_SIZE;
+export const canvasWidth = (map: GameMap): number => boardWidthPx(map);
+export const canvasHeight = (map: GameMap): number => boardHeightPx(map) + STATUS_H;
 
 export interface ViewState {
   readonly ui: UiState;
@@ -37,16 +37,20 @@ function drawTerrain(ctx: CanvasRenderingContext2D, state: GameState): void {
     }
   }
 
+  const widthPx = boardWidthPx(map);
+  const heightPx = boardHeightPx(map);
   ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)';
   ctx.lineWidth = 1;
-  for (let i = 0; i <= GRID; i++) {
+  for (let i = 0; i <= map.width; i++) {
     ctx.beginPath();
     ctx.moveTo(i * TILE_SIZE + 0.5, 0);
-    ctx.lineTo(i * TILE_SIZE + 0.5, BOARD_PX);
+    ctx.lineTo(i * TILE_SIZE + 0.5, heightPx);
     ctx.stroke();
+  }
+  for (let i = 0; i <= map.height; i++) {
     ctx.beginPath();
     ctx.moveTo(0, i * TILE_SIZE + 0.5);
-    ctx.lineTo(BOARD_PX, i * TILE_SIZE + 0.5);
+    ctx.lineTo(widthPx, i * TILE_SIZE + 0.5);
     ctx.stroke();
   }
 }
@@ -123,8 +127,10 @@ function drawUnit(ctx: CanvasRenderingContext2D, unit: Unit, flashing: boolean):
 }
 
 function drawStatus(ctx: CanvasRenderingContext2D, state: GameState, ui: UiState): void {
+  const widthPx = boardWidthPx(state.map);
+  const heightPx = boardHeightPx(state.map);
   ctx.fillStyle = '#111827';
-  ctx.fillRect(0, BOARD_PX, CANVAS_WIDTH, STATUS_H);
+  ctx.fillRect(0, heightPx, widthPx, STATUS_H);
 
   let text: string;
   if (ui.k === 'over') {
@@ -139,5 +145,5 @@ function drawStatus(ctx: CanvasRenderingContext2D, state: GameState, ui: UiState
   ctx.font = '14px sans-serif';
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  ctx.fillText(text, 8, BOARD_PX + STATUS_H / 2);
+  ctx.fillText(text, 8, heightPx + STATUS_H / 2);
 }
