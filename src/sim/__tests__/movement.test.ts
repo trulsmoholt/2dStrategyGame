@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Domain, GameMap, GameState, Pos, Terrain, Unit } from '../types';
-import { reachableTiles } from '../movement';
+import { distanceAt, distanceField, reachableTiles } from '../movement';
 import { terrainCost } from '../map';
 
 function buildMap(rows: string[]): GameMap {
@@ -179,6 +179,58 @@ describe('reachableTiles', () => {
     const tiles = reachableTiles(state, 0);
     expect(has(tiles, { x: 1, y: 0 })).toBe(true);   // cost 2, exactly at budget
     expect(has(tiles, { x: 2, y: 0 })).toBe(false);  // cost 2+1=3, over budget
+  });
+});
+
+describe('distanceField / distanceAt', () => {
+  it('reports 0 at the source and the correct step distance elsewhere', () => {
+    const map = buildMap(['.....', '.....', '.....', '.....', '.....']);
+    const field = distanceField(map, [{ x: 2, y: 2 }], 'land');
+    expect(distanceAt(map, field, { x: 2, y: 2 })).toBe(0);
+    expect(distanceAt(map, field, { x: 3, y: 2 })).toBe(1);
+    expect(distanceAt(map, field, { x: 4, y: 2 })).toBe(2);   // 8-way: still 2 diagonal-equivalent steps
+    expect(distanceAt(map, field, { x: 4, y: 4 })).toBe(2);   // diagonal steps cost the same as orthogonal
+  });
+
+  it('reports the nearest of multiple sources', () => {
+    const map = buildMap(['.....', '.....', '.....', '.....', '.....']);
+    const field = distanceField(map, [{ x: 0, y: 0 }, { x: 4, y: 4 }], 'land');
+    expect(distanceAt(map, field, { x: 1, y: 1 })).toBe(1);
+    expect(distanceAt(map, field, { x: 3, y: 3 })).toBe(1);
+  });
+
+  it('routes around impassable terrain rather than cutting through it', () => {
+    const rows = [
+      '.....',
+      '.....',
+      '#####',
+      '.....',
+      '.....',
+    ];
+    const map = buildMap(rows);
+    const field = distanceField(map, [{ x: 2, y: 0 }], 'land');
+    // straight-line (Chebyshev) distance to (2,4) would be 4; the wall
+    // forces a detour around the row, so the real path distance is greater.
+    expect(distanceAt(map, field, { x: 2, y: 4 })).toBeGreaterThan(4);
+  });
+
+  it('reports Infinity for tiles the domain can never reach', () => {
+    const rows = ['.w.'];
+    const map = buildMap(rows);
+    const field = distanceField(map, [{ x: 0, y: 0 }], 'land');
+    expect(distanceAt(map, field, { x: 2, y: 0 })).toBe(Infinity);
+  });
+
+  it('water is free to enter for the sea domain but costs land 2 for rough', () => {
+    const rows = ['.~w'];
+    const map = buildMap(rows);
+    const landField = distanceField(map, [{ x: 0, y: 0 }], 'land');
+    expect(distanceAt(map, landField, { x: 1, y: 0 })).toBe(2);
+    expect(distanceAt(map, landField, { x: 2, y: 0 })).toBe(Infinity);
+
+    const seaField = distanceField(map, [{ x: 2, y: 0 }], 'sea');
+    expect(distanceAt(map, seaField, { x: 2, y: 0 })).toBe(0);
+    expect(distanceAt(map, seaField, { x: 0, y: 0 })).toBe(Infinity);
   });
 });
 

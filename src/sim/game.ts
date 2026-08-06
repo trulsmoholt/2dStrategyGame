@@ -1,12 +1,12 @@
 import type { Action, GameState, MapId } from './types';
 import { seedRng } from './rng';
 import { loadMap } from './map';
-import { MAP_STANDARD_ID, getMapDef } from './maps';
+import { MAP_NORTHERN_NORWAY_ID, getMapDef } from './maps';
 import { reduce, checkResult } from './reduce';
 
 export { checkResult };
 
-export function newGame(seed: number, mapId: MapId = MAP_STANDARD_ID): GameState {
+export function newGame(seed: number, mapId: MapId = MAP_NORTHERN_NORWAY_ID): GameState {
   const { map, units } = loadMap(getMapDef(mapId));
   const state: GameState = {
     map,
@@ -33,7 +33,7 @@ export function playOut(
 }
 
 export function replay(
-  seed: number, log: readonly Action[], mapId: MapId = MAP_STANDARD_ID,
+  seed: number, log: readonly Action[], mapId: MapId = MAP_NORTHERN_NORWAY_ID,
 ): GameState {
   let state = newGame(seed, mapId);
   for (const action of log) {

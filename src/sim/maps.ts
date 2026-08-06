@@ -45,8 +45,56 @@ export const MAP_STANDARD: MapDef = {
   roster: STANDARD_ROSTER,
 };
 
+// 20x16, deliberately NOT 180deg-rotationally symmetric. A vertical water
+// strait splits a west landmass (Player 0) from an east landmass (Player 1);
+// row 11 is the only row that is land end-to-end, so it's the single
+// crossing point a land unit can path through. Two rough tiles are included
+// so the mechanic is exercised in real play, not just test fixtures.
+const NORTHERN_NORWAY_TERRAIN = `
+......wwwwwww.......
+.......wwwww........
+.....~..wwww........
+........wwwww.......
+.......wwwwww.......
+.......wwwwwww......
+......wwwwwwww......
+......wwwwwww.......
+.......wwwwww.......
+........wwww........
+........wwww........
+....................
+........wwww........
+.......wwwwww.~.....
+......wwwwwww.......
+.....wwwwwwwww......
+`;
+
+// Reading order gives the ids `movement.ts`/`ai.ts` and the merge tests key
+// off: 0,1 are the adjacent P0 melee pair, 2..9 alternate roughly by row.
+const NORTHERN_NORWAY_ROSTER: readonly RosterEntry[] = [
+  { type: 'melee', owner: 0, pos: { x: 2, y: 3 } },
+  { type: 'melee', owner: 0, pos: { x: 3, y: 4 } },
+  { type: 'melee', owner: 1, pos: { x: 17, y: 4 } },
+  { type: 'ranged', owner: 0, pos: { x: 4, y: 5 } },
+  { type: 'ranged', owner: 1, pos: { x: 15, y: 6 } },
+  { type: 'melee', owner: 1, pos: { x: 16, y: 8 } },
+  { type: 'ranged', owner: 0, pos: { x: 4, y: 9 } },
+  { type: 'ranged', owner: 1, pos: { x: 15, y: 10 } },
+  { type: 'melee', owner: 0, pos: { x: 2, y: 12 } },
+  { type: 'melee', owner: 1, pos: { x: 17, y: 12 } },
+];
+
+export const MAP_NORTHERN_NORWAY_ID: MapId = 'northern-norway';
+
+export const MAP_NORTHERN_NORWAY: MapDef = {
+  id: MAP_NORTHERN_NORWAY_ID,
+  terrain: NORTHERN_NORWAY_TERRAIN,
+  roster: NORTHERN_NORWAY_ROSTER,
+};
+
 const REGISTRY: Record<MapId, MapDef> = {
   [MAP_STANDARD_ID]: MAP_STANDARD,
+  [MAP_NORTHERN_NORWAY_ID]: MAP_NORTHERN_NORWAY,
 };
 
 export function getMapDef(id: MapId): MapDef {

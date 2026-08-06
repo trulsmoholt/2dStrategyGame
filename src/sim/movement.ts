@@ -1,4 +1,4 @@
-import type { GameState, Player, Pos, Unit, UnitId } from './types';
+import type { Domain, GameMap, GameState, Player, Pos, Unit, UnitId } from './types';
 import { UNIT_STATS } from './units';
 import { chebyshev, inBounds, terrainAt, terrainCost } from './map';
 
@@ -68,4 +68,61 @@ export function reachableTiles(state: GameState, unitId: UnitId): Pos[] {
 
   result.sort((a, b) => a.y - b.y || a.x - b.x);
   return result;
+}
+
+// Multi-source Dijkstra (same Dial's-algorithm bucket-queue idea as
+// reachableTiles above) giving distance-to-nearest-source at every tile,
+// for a given domain's terrain cost. Unlike reachableTiles this has no mp
+// cap (buckets grow unbounded) and no ZoC-termination or occupancy check —
+// it answers "how far to walk here ignoring who's in the way," not "can
+// this unit legally end its turn here." Used by the AI's seek phase so a
+// unit heads toward the nearest enemy by actual path distance, not
+// straight-line Chebyshev distance, which can strand it on a coastline.
+export function distanceField(
+  map: GameMap, sources: readonly Pos[], domain: Domain,
+): number[] {
+  const size = map.width * map.height;
+  const idx = (p: Pos): number => p.y * map.width + p.x;
+
+  const dist = new Array<number>(size).fill(Infinity);
+  const settled = new Array<boolean>(size).fill(false);
+  const buckets: Pos[][] = [];
+
+  for (const s of sources) {
+    const i = idx(s);
+    if (dist[i]! > 0) {
+      dist[i] = 0;
+      (buckets[0] ??= []).push(s);
+    }
+  }
+
+  for (let d = 0; d < buckets.length; d++) {
+    const bucket = buckets[d];
+    if (!bucket) continue;
+    for (const p of bucket) {
+      const i = idx(p);
+      if (settled[i]!) continue;
+      settled[i] = true;
+
+      for (const n of neighbors8(p)) {
+        if (!inBounds(map, n)) continue;
+        const ni = idx(n);
+        if (settled[ni]!) continue;
+        const cost = terrainCost(terrainAt(map, n), domain);
+        if (!Number.isFinite(cost)) continue;
+
+        const nd = d + cost;
+        if (nd < dist[ni]!) {
+          dist[ni] = nd;
+          (buckets[nd] ??= []).push(n);
+        }
+      }
+    }
+  }
+
+  return dist;
+}
+
+export function distanceAt(map: GameMap, field: readonly number[], p: Pos): number {
+  return field[p.y * map.width + p.x]!;
 }

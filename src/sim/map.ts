@@ -17,11 +17,10 @@ export function terrainAt(map: GameMap, p: Pos): Terrain {
 }
 
 // Movement cost to enter a tile, by terrain and domain. Infinity = impassable.
-// Only `land` reflects real, exercised design (existing `wall` behavior,
-// plus `rough`/`water`, both parsed by `parseTerrain` but not yet placed by
-// any production map — MAP_STANDARD is `.`/`#` only). `sea` and `air` have
-// no unit yet (ROADMAP.md phase 4), so their rows are inert placeholders,
-// not real decisions:
+// `land` reflects real, exercised design — `wall`, `rough` and `water` all
+// appear on a real map (`MAP_NORTHERN_NORWAY`; `MAP_STANDARD` is still
+// `.`/`#` only). `sea` and `air` have no unit yet (ROADMAP.md phase 3), so
+// their rows are inert placeholders, not real decisions:
 // - sea: only water is enterable — a ship can't sail onto land.
 // - air: uniformly cost 1 everywhere — "planes ignore terrain" is the
 //   simplest coherent placeholder; anything more specific (e.g. blocking

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { MapDef, RosterEntry } from '../types';
 import { parseTerrain, buildRoster, loadMap } from '../map';
-import { getMapDef, MAP_STANDARD_ID } from '../maps';
+import { distanceAt, distanceField } from '../movement';
+import { getMapDef, MAP_STANDARD_ID, MAP_NORTHERN_NORWAY_ID } from '../maps';
 
 describe('parseTerrain', () => {
   it('maps each character to the right terrain', () => {
@@ -115,5 +116,36 @@ describe('getMapDef', () => {
 
   it('throws for an unknown map id', () => {
     expect(() => getMapDef('bogus')).toThrow(/unknown map id/);
+  });
+});
+
+describe('MAP_NORTHERN_NORWAY', () => {
+  it('loads without throwing, with the expected roster and dimensions', () => {
+    const { map, units } = loadMap(getMapDef(MAP_NORTHERN_NORWAY_ID));
+    expect(map.width).toBe(20);
+    expect(map.height).toBe(16);
+    expect(units.filter(u => u.owner === 0 && u.type === 'melee').length).toBe(3);
+    expect(units.filter(u => u.owner === 0 && u.type === 'ranged').length).toBe(2);
+    expect(units.filter(u => u.owner === 1 && u.type === 'melee').length).toBe(3);
+    expect(units.filter(u => u.owner === 1 && u.type === 'ranged').length).toBe(2);
+  });
+
+  it('the causeway connects the two landmasses for a land unit', () => {
+    const { map, units } = loadMap(getMapDef(MAP_NORTHERN_NORWAY_ID));
+    const p0 = units.find(u => u.owner === 0)!;
+    const p1 = units.find(u => u.owner === 1)!;
+    const field = distanceField(map, [p1.pos], 'land');
+    expect(distanceAt(map, field, p0.pos)).toBeLessThan(Infinity);
+  });
+
+  it('is not 180deg-rotationally symmetric', () => {
+    const { map } = loadMap(getMapDef(MAP_NORTHERN_NORWAY_ID));
+    const mismatches = map.tiles.some((terrain, i) => {
+      const x = i % map.width;
+      const y = Math.floor(i / map.width);
+      const mirrored = map.tiles[(map.height - 1 - y) * map.width + (map.width - 1 - x)];
+      return terrain !== mirrored;
+    });
+    expect(mismatches).toBe(true);
   });
 });
