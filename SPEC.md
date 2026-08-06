@@ -25,7 +25,7 @@ greedy AI. Units move and attack once per turn; last army standing wins.
 | Zone of control | Entering a tile adjacent to an enemy halts movement — no exceptions |
 | Geometry | 8-way movement, Chebyshev distance, diagonals always legal |
 | Roster | 2 unit types, 2 terrain types (data-driven, designed to grow) |
-| Map | One hardcoded 16×16 ASCII map, 180°-rotationally symmetric |
+| Map | One playable map, loaded by id through a registry (`getMapDef`); 16×16, 180°-rotationally symmetric |
 | AI | Two-phase per unit: fight if a target is reachable, else seek |
 | Input | Click unit → click destination → click target |
 | Renderer | Canvas 2D, full redraw, AI actions stepped ~400 ms apart |
@@ -118,17 +118,38 @@ for a *unit* anywhere else is a bug for the same reason: it silently ignores
 
 ### 3.4 Maps — `src/sim/map.ts` and `maps.ts`
 
-`parseMap` assigns unit ids in reading order from 0. ASCII legend: `.` plain,
-`#` wall, `m`/`r` Player 0 melee/ranged, `M`/`R` Player 1 melee/ranged.
+A map is a `MapDef` (`src/sim/types.ts`): `{ id, terrain, roster }`. Terrain
+and the initial unit roster are independent inputs — the same terrain grid
+could in principle back more than one roster — rather than one ASCII grid
+encoding both.
 
-`MAP_STANDARD` in `maps.ts` — 16×16, 180°-rotationally symmetric, all walls
-2 tiles thick:
+`parseTerrain(ascii)` builds a `GameMap` from terrain characters only. ASCII
+legend: `.` plain, `#` wall, `~` rough, `w` water. Throws on non-rectangular
+input or an unknown character.
+
+`buildRoster(roster: readonly RosterEntry[])` builds the initial `Unit[]`,
+assigning ids in **array order** from 0. `RosterEntry` is
+`{ type, owner, pos }`. Throws if either side does not have exactly 3 melee +
+2 ranged, or if two entries share a start position.
+
+`loadMap(def: MapDef): ParsedMap` combines the two and is the function a game
+actually calls: it parses `def.terrain`, builds `def.roster`, then validates
+every unit starts in bounds and on terrain passable for its `domain` —
+throwing otherwise. A glyph-based grid got both guarantees for free (a glyph
+set its own tile to `plain`); splitting terrain from the roster means
+`loadMap` has to check them explicitly.
+
+Maps are looked up by id through a small registry in `maps.ts`:
+`getMapDef(id: MapId): MapDef` throws `getMapDef: unknown map id '${id}'` if
+`id` isn't registered. `MAP_STANDARD_ID` (`'standard'`) is the only
+registered id today; `MAP_STANDARD` is its `MapDef` — 16×16,
+180°-rotationally symmetric, all walls 2 tiles thick:
 
 ```
-..m.r...........
-.m..............
-m.......##......
-.r......##......
+................
+................
+........##......
+........##......
 ........##......
 ....##..........
 ....##..........
@@ -137,15 +158,18 @@ m.......##......
 ..........##....
 ..........##....
 ......##........
-......##......R.
-......##.......M
-..............M.
-...........R.M..
+......##........
+......##........
+................
+................
 ```
 
-`parseMap` throws on: non-rectangular input, unknown characters, or a unit
-count other than 3 melee + 2 ranged per side. A malformed map is a
-programming error, not a runtime condition.
+(its roster places the same 5v5 starting positions as before, just as
+`RosterEntry` data rather than glyphs on this grid.)
+
+`newGame(seed, mapId = MAP_STANDARD_ID)` and `replay(seed, log, mapId = ...)`
+call `loadMap(getMapDef(mapId))`. An unknown `mapId` throws — a malformed or
+missing map is a programming error, not a runtime condition.
 
 ### 3.5 Movement — `src/sim/movement.ts`
 
@@ -180,12 +204,11 @@ without needing a stable sort.
 
 `Terrain` has four members: `plain` (cost 1 to `land`), `wall` (impassable
 to everything built so far), `rough` (cost 2, still `land`-passable), and
-`water` (impassable to `land`, passable to `sea`). Only `plain`/`wall`
-appear on `MAP_STANDARD` today — `rough`/`water` exist so the cost table and
-domain restriction are exercised by tests ahead of the map that will
-actually place them (ROADMAP.md). `sea`/`air` domain costs have no unit to
-exercise them yet; see the comment on `TERRAIN_COST` in `map.ts` for their
-placeholder values.
+`water` (impassable to `land`, passable to `sea`). `parseTerrain` (§3.4)
+parses all four for real; only `plain`/`wall` appear on `MAP_STANDARD`
+today — no production map places `rough`/`water` yet. `sea`/`air` domain
+costs have no unit to exercise them yet; see the comment on `TERRAIN_COST` in
+`map.ts` for their placeholder values.
 
 ### 3.6 Combat — `src/sim/combat.ts`
 
@@ -244,8 +267,8 @@ the risk of losing everything in a single exchange.
 
 - Merging permanently reduces your action count for the rest of the game.
   There is no split — splitting would have to mint a `UnitId` at runtime, and
-  ids come from `parseMap` reading order, so it would need a `nextId` counter
-  on `GameState` to stay replay-deterministic.
+  ids come from `buildRoster`'s array order (§3.4), so it would need a
+  `nextId` counter on `GameState` to stay replay-deterministic.
 - `checkResult` counts bodies, so an army merged down to one unit loses the
   moment that unit dies.
 - `MAX_STACK = 3` exists so the endgame cannot collapse into a single
@@ -425,11 +448,14 @@ decisions:
   (§3.5); no terrain grants a combat bonus, and `wall` remains impassable to
   every domain built so far.
 - Any third unit type, unit abilities, items, upgrades, veterancy, or healing.
-  **→ ROADMAP, phase 3** for ship and plane. Merging (§3.7) is the one
+  **→ ROADMAP, phase 2** for ship and plane. Merging (§3.7) is the one
   exception already built: it is not an ability on a unit type, it is an
   action.
-- Multiple maps, a map-select screen, or procedural generation.
-  **→ ROADMAP, phases 1–2.**
+- A second playable map, a map-select screen, or procedural generation. The
+  loading mechanism is built — maps are looked up by id through a registry
+  (§3.4) — but only `standard` is registered and nothing lets a player choose
+  among maps. **→ ROADMAP, phase 1** for the actual Northern Norway map; a
+  map-select screen isn't scheduled.
 - Fog of war and any form of hidden information. Both players see everything;
   `GameState` has no per-player view.
 - Undo, redo, save/load, or a persisted replay format. `{ seed, log }` is

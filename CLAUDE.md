@@ -85,8 +85,8 @@ passability both come from `terrainCost(terrain, domain)` in `src/sim/map.ts`
 (`Infinity` = impassable), keyed by the mover's `UnitStats.domain` — today
 only `'land'` is exercised by a real unit. `plain`/`wall` behave exactly as
 before (cost 1 / impassable); `rough` (cost 2) and `water` (impassable to
-`land`) exist so the mechanism is tested ahead of the map that will actually
-place them, per ROADMAP.md.
+`land`) are parsed for real by `parseTerrain` (`src/sim/map.ts`), but no
+production map places them yet — `MAP_STANDARD` is still `.`/`#` only.
 
 **Movement's zone-of-control rule has one sharp edge**: a tile adjacent to a
 living enemy is added to `reachableTiles`'s result but not expanded
@@ -152,3 +152,15 @@ and `Import` parses/validates pasted JSON and calls the existing
 reconstructed state and resume live play from there — see
 [src/render/CLAUDE.md](src/render/CLAUDE.md) for the validation/error-display
 details.
+
+**ROADMAP.md's map-format work (terrain/roster split, map registry) is
+built.** `parseMap` is gone, replaced by
+three functions in `src/sim/map.ts`: `parseTerrain(ascii)` builds a `GameMap`
+from terrain characters only (no unit glyphs), `buildRoster(roster)` builds
+the initial `Unit[]` from a structured `RosterEntry[]`, and `loadMap(def)`
+combines the two and validates every unit starts in bounds on passable
+terrain. Maps are looked up by id through `getMapDef` in `src/sim/maps.ts`,
+which throws on an unknown id; `newGame`/`replay` take an optional `mapId`
+(`src/sim/game.ts`), defaulting to `MAP_STANDARD_ID`. Only `standard` is
+registered — this phase built the loading mechanism, not a second map or any
+map-select UI, both of which stay ROADMAP.md work.

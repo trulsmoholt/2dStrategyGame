@@ -12,10 +12,9 @@ playable game; the current 16×16 board stays playable throughout.
 
 | # | Change |
 | --- | --- |
-| 1 | Map format: terrain layer separate from the unit roster; multiple maps |
-| 2 | Path-distance AI seek **and** the Northern Norway map, together |
-| 3 | Ship and plane unit types; cargo (below) |
-| 4 | Victory conditions and turn-cap retune |
+| 1 | Path-distance AI seek **and** the Northern Norway map, together |
+| 2 | Ship and plane unit types; cargo (below) |
+| 3 | Victory conditions and turn-cap retune |
 
 Merging (SPEC.md §3.7) was the first piece of this work and is built. It was
 independent of everything above, which is why it landed first. The renderer
@@ -31,21 +30,31 @@ is why it landed ahead of it; ships and planes are unblocked now that the
 domain table exists (they're stat-table rows plus a `domain`, not hardcoded
 special cases).
 
+Map format — terrain layer separate from the unit roster, plus a map
+registry keyed by id — is also built, and was independent of everything
+below, which is why it took the phase-1 slot next and has now vacated it in
+turn. `parseMap` is gone; `src/sim/map.ts` now has `parseTerrain`,
+`buildRoster`, and `loadMap`, and `src/sim/maps.ts` is a registry
+(`getMapDef`) that `newGame`/`replay` look up by an optional `mapId`. Only
+`standard` is registered — this phase built the mechanism multiple maps
+need, not a second map's content. The Northern Norway map itself is still
+phase 1's job below, alongside the AI seek change it's paired with.
+
 One ordering constraint is not negotiable:
 
-- **Phase 2 is one phase, not two.** The seek phase in `ai.ts` minimises
+- **Phase 1 is one phase, not two.** The seek phase in `ai.ts` minimises
   Chebyshev distance to the nearest enemy (SPEC.md §4). On a coastline that
   walks land units to the shore and strands them opposite an enemy they can
   never path to — every game becomes a turn-cap draw. The seek phase must move
   to a Dijkstra distance field over passable terrain in the same change that
   introduces the map.
 
-Phase 2 also ends the map's 180°-rotational symmetry, which is what currently
+Phase 1 also ends the map's 180°-rotational symmetry, which is what currently
 makes "both sides win at least once" (SPEC.md §8) a meaningful fairness check.
 Balance moves to asymmetric rosters, and the self-play assertion becomes a
 win-rate band rather than a presence check.
 
-**Re-test the AI merge heuristic when phase 2 lands.** SPEC.md §4 has the
+**Re-test the AI merge heuristic when phase 1 lands.** SPEC.md §4 has the
 measurements showing every heuristic tried costs ~15 points of win rate on the
 current open map, because merging forfeits an attack every turn plus a body's
 worth of zone of control. A one-tile chokepoint inverts that: the second unit
@@ -79,4 +88,4 @@ Still to build when cargo lands: an unload action (it targets a *tile*, so it
 needs its own `UiState` variant and its own panel button, plus a rule for
 whose turn it spends), and AI handling — an AI that loads but never unloads
 strands its own army at sea, which is the same failure family as the
-Chebyshev-seek problem in phase 2.
+Chebyshev-seek problem in phase 1.

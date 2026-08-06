@@ -29,6 +29,14 @@ describe('newGame', () => {
     expect(legalActions(state).length).toBeGreaterThanOrEqual(1);
     expect(legalActions(state).some(a => a.t === 'endTurn')).toBe(true);
   });
+
+  it('defaults to the standard map when mapId is omitted', () => {
+    expect(newGame(1)).toEqual(newGame(1, 'standard'));
+  });
+
+  it('throws for an unknown map id', () => {
+    expect(() => newGame(1, 'no-such-map')).toThrow(/unknown map id/);
+  });
 });
 
 // A trivial, RNG-free policy: wait out every unit, then end turn. Exercises
