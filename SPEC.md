@@ -26,7 +26,7 @@ last army standing wins.
 | Zone of control | Entering a tile adjacent to an enemy halts movement — no exceptions |
 | Geometry | 8-way movement, Chebyshev distance, diagonals always legal |
 | Roster | 2 unit types, 4 terrain types (data-driven, designed to grow) |
-| Map | One hardcoded 20×16 ASCII map, coastline (water) splits the two sides, not 180°-symmetric |
+| Map | Loaded by id through a registry (`getMapDef`); default is 20×16, coastline (water) splits the two sides, not 180°-symmetric |
 | AI | Two-phase per unit: fight if a target is reachable, else seek by path distance |
 | Input | Click unit → click destination → click target |
 | Renderer | Canvas 2D, full redraw, AI actions stepped ~400 ms apart |
@@ -123,45 +123,85 @@ for a *unit* anywhere else is a bug for the same reason: it silently ignores
 
 ### 3.4 Maps — `src/sim/map.ts` and `maps.ts`
 
-`parseMap` assigns unit ids in reading order from 0. ASCII legend: `.`
-plain, `#` wall, `~` rough, `w` water, `m`/`r` Player 0 melee/ranged, `M`/`R`
-Player 1 melee/ranged.
+A map is a `MapDef` (`src/sim/types.ts`): `{ id, terrain, roster }`. Terrain
+and the initial unit roster are independent inputs — the same terrain grid
+could in principle back more than one roster — rather than one ASCII grid
+encoding both.
 
-`newGame` plays `MAP_NORTHERN_NORWAY` — 20×16, deliberately **not**
-180°-rotationally symmetric. A vertical water strait splits a west
-landmass (Player 0) from an east landmass (Player 1); every row has a
-water gap except row 11, which is land end-to-end and is therefore the
-only place a land unit can cross:
+`parseTerrain(ascii)` builds a `GameMap` from terrain characters only. ASCII
+legend: `.` plain, `#` wall, `~` rough, `w` water. Throws on non-rectangular
+input or an unknown character.
+
+`buildRoster(roster: readonly RosterEntry[])` builds the initial `Unit[]`,
+assigning ids in **array order** from 0. `RosterEntry` is
+`{ type, owner, pos }`. Throws if either side does not have exactly 3 melee +
+2 ranged, or if two entries share a start position.
+
+`loadMap(def: MapDef): ParsedMap` combines the two and is the function a game
+actually calls: it parses `def.terrain`, builds `def.roster`, then validates
+every unit starts in bounds and on terrain passable for its `domain` —
+throwing otherwise. A glyph-based grid got both guarantees for free (a glyph
+set its own tile to `plain`); splitting terrain from the roster means
+`loadMap` has to check them explicitly.
+
+Maps are looked up by id through a small registry in `maps.ts`:
+`getMapDef(id: MapId): MapDef` throws `getMapDef: unknown map id '${id}'` if
+`id` isn't registered. Two ids are registered today. `MAP_STANDARD_ID`
+(`'standard'`) is the original 16×16, 180°-rotationally symmetric map, all
+walls 2 tiles thick:
+
+```
+................
+................
+........##......
+........##......
+........##......
+....##..........
+....##..........
+....##..........
+..........##....
+..........##....
+..........##....
+......##........
+......##........
+......##........
+................
+................
+```
+
+(its roster places the same 5v5 starting positions as before, just as
+`RosterEntry` data rather than glyphs on this grid.) `MAP_NORTHERN_NORWAY_ID`
+(`'northern-norway'`) is the default — 20×16, deliberately **not**
+180°-rotationally symmetric. A vertical water strait splits a west landmass
+(Player 0) from an east landmass (Player 1); every row has a water gap
+except row 11, which is land end-to-end and is therefore the only place a
+land unit can cross:
 
 ```
 ......wwwwwww.......
 .......wwwww........
 .....~..wwww........
-..m.....wwwww.......
-...m...wwwwww....M..
-....r..wwwwwww......
-......wwwwwwww.R....
+........wwwww.......
+.......wwwwww.......
+.......wwwwwww......
+......wwwwwwww......
 ......wwwwwww.......
-.......wwwwww...M...
-....r...wwww........
-........wwww...R....
+.......wwwwww.......
+........wwww........
+........wwww........
 ....................
-..m.....wwww.....M..
+........wwww........
 .......wwwwww.~.....
 ......wwwwwww.......
 .....wwwwwwwww......
 ```
 
-`MAP_STANDARD` (the original 16×16, 180°-rotationally symmetric map, all
-walls 2 tiles thick) still exists in `maps.ts` and is still exported —
-`src/sim/__tests__/movement.test.ts` and other tests that want a simple,
-obstacle-free fixture use hand-built maps of their own rather than either
-named map, but nothing stops a caller from parsing `MAP_STANDARD` directly.
-It is no longer what `newGame` plays.
-
-`parseMap` throws on: non-rectangular input, unknown characters, or a unit
-count other than 3 melee + 2 ranged per side. A malformed map is a
-programming error, not a runtime condition.
+`newGame(seed, mapId = MAP_NORTHERN_NORWAY_ID)` and
+`replay(seed, log, mapId = ...)` call `loadMap(getMapDef(mapId))`. An
+unknown `mapId` throws — a malformed or missing map is a programming error,
+not a runtime condition. `MAP_STANDARD` stays registered and playable by
+explicit id; nothing plays it by default anymore, and there is still no
+map-select UI — `newGame()`'s default is the only lever.
 
 ### 3.5 Movement — `src/sim/movement.ts`
 
@@ -196,10 +236,11 @@ without needing a stable sort.
 
 `Terrain` has four members: `plain` (cost 1 to `land`), `wall` (impassable
 to everything built so far), `rough` (cost 2, still `land`-passable), and
-`water` (impassable to `land`, passable to `sea`). All four appear on
-`MAP_NORTHERN_NORWAY`. `sea`/`air` domain costs have no unit to exercise
-them yet (ROADMAP.md phase 3); see the comment on `TERRAIN_COST` in
-`map.ts` for their placeholder values.
+`water` (impassable to `land`, passable to `sea`). `parseTerrain` (§3.4)
+parses all four for real; all four appear on `MAP_NORTHERN_NORWAY` (the
+default map) — `MAP_STANDARD` is still `plain`/`wall` only. `sea`/`air`
+domain costs have no unit to exercise them yet (ROADMAP.md phase 3); see
+the comment on `TERRAIN_COST` in `map.ts` for their placeholder values.
 
 **`distanceField`, also in `movement.ts`, is a related but separate
 function**: multi-source Dijkstra (the same Dial's-algorithm bucket-queue
@@ -271,8 +312,8 @@ the risk of losing everything in a single exchange.
 
 - Merging permanently reduces your action count for the rest of the game.
   There is no split — splitting would have to mint a `UnitId` at runtime, and
-  ids come from `parseMap` reading order, so it would need a `nextId` counter
-  on `GameState` to stay replay-deterministic.
+  ids come from `buildRoster`'s array order (§3.4), so it would need a
+  `nextId` counter on `GameState` to stay replay-deterministic.
 - `checkResult` counts bodies, so an army merged down to one unit loses the
   moment that unit dies.
 - `MAX_STACK = 3` exists so the endgame cannot collapse into a single
@@ -468,8 +509,11 @@ decisions:
   **→ ROADMAP, phase 3** for ship and plane. Merging (§3.7) is the one
   exception already built: it is not an ability on a unit type, it is an
   action.
-- Multiple maps, a map-select screen, or procedural generation.
-  **→ ROADMAP, phases 1–2.**
+- A second playable map, a map-select screen, or procedural generation. The
+  loading mechanism is built — maps are looked up by id through a registry
+  (§3.4) — but only `standard` is registered and nothing lets a player choose
+  among maps. **→ ROADMAP, phase 2** for the actual Northern Norway map; a
+  map-select screen isn't scheduled.
 - Fog of war and any form of hidden information. Both players see everything;
   `GameState` has no per-player view.
 - Undo, redo, save/load, or a persisted replay format. `{ seed, log }` is
@@ -499,12 +543,15 @@ Unit tests (`src/sim/__tests__/`):
   nearest-of-multiple-sources, routing around impassable terrain rather than
   cutting through it, `Infinity` for domain-unreachable tiles, and the
   `land`-vs-`sea` cost asymmetry over water.
-- `map.test.ts` — `parseMap`'s `~`/`w` legend characters; an unrecognized
-  character still throws; `MAP_NORTHERN_NORWAY` parses to the right
-  dimensions and roster counts, isn't 180°-symmetric, and its causeway
-  actually connects a Player 0 and a Player 1 unit for the `land` domain
-  (via `distanceField`) — the one hard requirement the map's legality rests
-  on.
+- `map.test.ts` — `parseTerrain`'s legend and edge cases (blank-line
+  stripping, non-rectangular input, unknown characters, empty input);
+  `buildRoster`'s id assignment, roster-count and duplicate-position
+  validation; `loadMap`'s out-of-bounds and impassable-start-tile checks;
+  `getMapDef`'s lookup and unknown-id error. Plus `MAP_NORTHERN_NORWAY`
+  specifically: loads to the right dimensions and roster counts, isn't
+  180°-symmetric, and its causeway actually connects a Player 0 and a
+  Player 1 unit for the `land` domain (via `distanceField`) — the one hard
+  requirement the map's legality rests on.
 - `combat.test.ts` — damage never below 1; a dead defender never counters; a
   range-2 attacker hitting a range-1 defender from distance 2 takes no
   counter; melee at range 1 trade both ways; the RNG advances exactly once on

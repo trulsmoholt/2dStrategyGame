@@ -5,7 +5,7 @@ import { legalActions } from '../actions';
 import { terrainAt } from '../map';
 
 describe('newGame', () => {
-  it('builds a valid initial state from MAP_STANDARD', () => {
+  it('builds a valid initial state', () => {
     const state = newGame(1);
     expect(state.units.length).toBe(10);
     expect(state.units.filter(u => u.owner === 0).length).toBe(5);
@@ -28,6 +28,14 @@ describe('newGame', () => {
     const state = newGame(1);
     expect(legalActions(state).length).toBeGreaterThanOrEqual(1);
     expect(legalActions(state).some(a => a.t === 'endTurn')).toBe(true);
+  });
+
+  it('defaults to the Northern Norway map when mapId is omitted', () => {
+    expect(newGame(1)).toEqual(newGame(1, 'northern-norway'));
+  });
+
+  it('throws for an unknown map id', () => {
+    expect(() => newGame(1, 'no-such-map')).toThrow(/unknown map id/);
   });
 });
 
