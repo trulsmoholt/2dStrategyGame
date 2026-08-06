@@ -20,12 +20,12 @@ export function terrainAt(map: GameMap, p: Pos): Terrain {
 // Only `land` reflects real, exercised design (existing `wall` behavior,
 // plus `rough`/`water`, both parsed by `parseTerrain` but not yet placed by
 // any production map — MAP_STANDARD is `.`/`#` only). `sea` and `air` have
-// no unit yet (ROADMAP.md phase 3), so their rows are inert placeholders,
+// no unit yet (ROADMAP.md phase 4), so their rows are inert placeholders,
 // not real decisions:
 // - sea: only water is enterable — a ship can't sail onto land.
 // - air: uniformly cost 1 everywhere — "planes ignore terrain" is the
 //   simplest coherent placeholder; anything more specific (e.g. blocking
-//   flight over walls) is a real design call for when phase 3 defines
+//   flight over walls) is a real design call for when phase 4 defines
 //   actual air units, not now. Revisit both rows at that point.
 const TERRAIN_COST: Record<Terrain, Record<Domain, number>> = {
   plain: { land: 1,        sea: Infinity, air: 1 },

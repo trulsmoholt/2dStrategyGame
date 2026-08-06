@@ -448,13 +448,13 @@ decisions:
   (§3.5); no terrain grants a combat bonus, and `wall` remains impassable to
   every domain built so far.
 - Any third unit type, unit abilities, items, upgrades, veterancy, or healing.
-  **→ ROADMAP, phase 2** for ship and plane. Merging (§3.7) is the one
+  **→ ROADMAP, phase 3** for ship and plane. Merging (§3.7) is the one
   exception already built: it is not an ability on a unit type, it is an
   action.
 - A second playable map, a map-select screen, or procedural generation. The
   loading mechanism is built — maps are looked up by id through a registry
   (§3.4) — but only `standard` is registered and nothing lets a player choose
-  among maps. **→ ROADMAP, phase 1** for the actual Northern Norway map; a
+  among maps. **→ ROADMAP, phase 2** for the actual Northern Norway map; a
   map-select screen isn't scheduled.
 - Fog of war and any form of hidden information. Both players see everything;
   `GameState` has no per-player view.
