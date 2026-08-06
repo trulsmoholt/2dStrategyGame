@@ -1,4 +1,4 @@
-import type { GameMap, GameState, Unit, UnitId } from '../sim/index';
+import type { GameMap, GameState, Terrain, Unit, UnitId } from '../sim/index';
 import { UNIT_STATS, terrainAt, unitMaxHp } from '../sim/index';
 import type { UiState } from './ui';
 import { TILE_SIZE } from './ui';
@@ -15,7 +15,12 @@ export interface ViewState {
 }
 
 const OWNER_COLOR: Record<0 | 1, string> = { 0: '#2563eb', 1: '#dc2626' };
-const TERRAIN_COLOR: Record<'plain' | 'wall', string> = { plain: '#e8f5e9', wall: '#374151' };
+const TERRAIN_COLOR: Record<Terrain, string> = {
+  plain: '#e8f5e9',
+  wall: '#374151',
+  rough: '#c9b458',   // never rendered from MAP_STANDARD today
+  water: '#60a5fa',   // never rendered from MAP_STANDARD today
+};
 const REACHABLE_OVERLAY = 'rgba(37, 99, 235, 0.28)';
 const ATTACKABLE_OVERLAY = 'rgba(220, 38, 38, 0.35)';
 const MERGEABLE_OVERLAY = 'rgba(34, 197, 94, 0.45)';

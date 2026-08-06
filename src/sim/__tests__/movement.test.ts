@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { GameMap, GameState, Pos, Terrain, Unit } from '../types';
+import type { Domain, GameMap, GameState, Pos, Terrain, Unit } from '../types';
 import { reachableTiles } from '../movement';
+import { terrainCost } from '../map';
 
 function buildMap(rows: string[]): GameMap {
   const height = rows.length;
@@ -9,7 +10,12 @@ function buildMap(rows: string[]): GameMap {
   for (const row of rows) {
     if (row.length !== width) throw new Error('test map rows must be equal length');
     for (const ch of row) {
-      tiles.push(ch === '#' ? 'wall' : 'plain');
+      switch (ch) {
+        case '#': tiles.push('wall'); break;
+        case '~': tiles.push('rough'); break;
+        case 'w': tiles.push('water'); break;
+        default:  tiles.push('plain');
+      }
     }
   }
   return { width, height, tiles };
@@ -141,5 +147,50 @@ describe('reachableTiles', () => {
       const cur = tiles[i]!;
       expect(cur.y > prev.y || (cur.y === prev.y && cur.x > prev.x)).toBe(true);
     }
+  });
+
+  it('finds a cheaper diagonal path around a rough tile', () => {
+    // ranged (mp 2) at (0,0). (1,0) is rough (cost 2). The direct route to
+    // (2,0) — straight through the rough tile — costs 2 + 1 = 3, over the
+    // mp-2 budget. A diagonal detour through (1,1) (plain, cost 1) then to
+    // (2,0) (plain, cost 1) costs only 2, within budget — proving the
+    // algorithm finds the cheapest of several candidate routes, not just
+    // whichever one a single fixed path would try first.
+    const rows = ['.~.', '...'];
+    const mover = makeUnit({ id: 0, owner: 0, pos: { x: 0, y: 0 }, type: 'ranged' });
+    const state = buildState(rows, [mover]);
+    const tiles = reachableTiles(state, 0);
+    expect(has(tiles, { x: 2, y: 0 })).toBe(true);
+  });
+
+  it('a land unit cannot enter water even with ample mp', () => {
+    const rows = ['.w...'];
+    const mover = makeUnit({ id: 0, owner: 0, pos: { x: 0, y: 0 } }); // melee, mp 3, domain land
+    const state = buildState(rows, [mover]);
+    const tiles = reachableTiles(state, 0);
+    expect(has(tiles, { x: 1, y: 0 })).toBe(false);  // the water tile itself
+    expect(has(tiles, { x: 2, y: 0 })).toBe(false);  // beyond it, unreachable without crossing
+  });
+
+  it('a rough tile is reachable exactly at the edge of budget, one step further is not', () => {
+    const rows = ['.~.'];
+    const mover = makeUnit({ id: 0, owner: 0, pos: { x: 0, y: 0 }, type: 'ranged' }); // mp 2
+    const state = buildState(rows, [mover]);
+    const tiles = reachableTiles(state, 0);
+    expect(has(tiles, { x: 1, y: 0 })).toBe(true);   // cost 2, exactly at budget
+    expect(has(tiles, { x: 2, y: 0 })).toBe(false);  // cost 2+1=3, over budget
+  });
+});
+
+describe('terrainCost', () => {
+  it.each([
+    ['plain', 'land', 1], ['wall', 'land', Infinity],
+    ['rough', 'land', 2], ['water', 'land', Infinity],
+    ['plain', 'sea', Infinity], ['wall', 'sea', Infinity],
+    ['rough', 'sea', Infinity], ['water', 'sea', 1],
+    ['plain', 'air', 1], ['wall', 'air', 1],
+    ['rough', 'air', 1], ['water', 'air', 1],
+  ] as [Terrain, Domain, number][])('cost(%s, %s) === %s', (terrain, domain, expected) => {
+    expect(terrainCost(terrain, domain)).toBe(expected);
   });
 });

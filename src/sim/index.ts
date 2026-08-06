@@ -1,7 +1,7 @@
 // Public barrel — the ONLY module src/render may import.
 
 export type {
-  Player, UnitId, UnitTypeId, Terrain, Pos, Unit, GameMap, GameResult,
+  Player, UnitId, UnitTypeId, Domain, Terrain, Pos, Unit, GameMap, GameResult,
   GameState, Action,
 } from './types';
 export { MAX_TURNS, MAX_STACK, MIN_DAMAGE, DAMAGE_ROLL_MIN, DAMAGE_ROLL_MAX } from './types';
@@ -15,7 +15,7 @@ export { UNIT_STATS, unitMaxHp, unitPower, mergeKind } from './units';
 export { MAP_STANDARD } from './maps';
 
 export type { ParsedMap } from './map';
-export { parseMap, inBounds, terrainAt, chebyshev } from './map';
+export { parseMap, inBounds, terrainAt, chebyshev, terrainCost } from './map';
 
 export { unitAt, inEnemyZoc, reachableTiles } from './movement';
 
