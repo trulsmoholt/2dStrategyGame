@@ -1,4 +1,4 @@
-import type { GameMap, Pos, Terrain, Unit, UnitTypeId, Player } from './types';
+import type { Domain, GameMap, Pos, Terrain, Unit, UnitTypeId, Player } from './types';
 import { UNIT_STATS } from './units';
 
 export interface ParsedMap {
@@ -14,6 +14,27 @@ export function terrainAt(map: GameMap, p: Pos): Terrain {
   const tile = map.tiles[p.y * map.width + p.x];
   if (tile === undefined) throw new Error(`terrainAt: ${p.x},${p.y} out of bounds`);
   return tile;
+}
+
+// Movement cost to enter a tile, by terrain and domain. Infinity = impassable.
+// Only `land` reflects real, exercised design (existing `wall` behavior,
+// plus `rough`/`water`, both currently test-fixture-only — MAP_STANDARD
+// never places them). `sea` and `air` have no unit yet (ROADMAP.md phase 4),
+// so their rows are inert placeholders, not real decisions:
+// - sea: only water is enterable — a ship can't sail onto land.
+// - air: uniformly cost 1 everywhere — "planes ignore terrain" is the
+//   simplest coherent placeholder; anything more specific (e.g. blocking
+//   flight over walls) is a real design call for when phase 4 defines
+//   actual air units, not now. Revisit both rows at that point.
+const TERRAIN_COST: Record<Terrain, Record<Domain, number>> = {
+  plain: { land: 1,        sea: Infinity, air: 1 },
+  wall:  { land: Infinity, sea: Infinity, air: 1 },
+  rough: { land: 2,        sea: Infinity, air: 1 },
+  water: { land: Infinity, sea: 1,        air: 1 },
+};
+
+export function terrainCost(terrain: Terrain, domain: Domain): number {
+  return TERRAIN_COST[terrain][domain];
 }
 
 export function chebyshev(a: Pos, b: Pos): number {

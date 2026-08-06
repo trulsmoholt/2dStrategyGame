@@ -1,7 +1,8 @@
 export type Player = 0 | 1;
 export type UnitId = number;
 export type UnitTypeId = 'melee' | 'ranged';
-export type Terrain = 'plain' | 'wall';
+export type Domain = 'land' | 'sea' | 'air';
+export type Terrain = 'plain' | 'wall' | 'rough' | 'water';
 
 export interface Pos { readonly x: number; readonly y: number }
 

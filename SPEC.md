@@ -97,13 +97,19 @@ fixed point) — map 0 to a constant.
 ### 3.3 Unit stats — `src/sim/units.ts`
 
 ```ts
-melee:  { maxHp: 10, power: 4, mp: 3, range: 1 }
-ranged: { maxHp:  6, power: 3, mp: 2, range: 2 }
+melee:  { maxHp: 10, power: 4, mp: 3, range: 1, domain: 'land' }
+ranged: { maxHp:  6, power: 3, mp: 2, range: 2, domain: 'land' }
 ```
 
 **This table is the extension point.** Adding a third unit type must require
 editing `UnitTypeId` and this record and nothing else. Any code that
 `switch`es on unit type outside this file is a bug.
+
+`domain` selects which row of `terrainCost` (§3.5) governs the unit's
+movement. Like `mp`, `range` and `glyph`, it's read straight from the table
+and unaffected by merging (§3.7). Both unit types are `'land'` today; `'sea'`
+and `'air'` exist in the `Domain` type for ROADMAP.md's ship/plane phase but
+have no unit yet.
 
 `units.ts` also owns the three merge-aware helpers of §3.7 — `unitMaxHp`,
 `unitPower`, and `mergeKind`. Reading `UNIT_STATS[u.type].power` or `.maxHp`
@@ -143,24 +149,43 @@ programming error, not a runtime condition.
 
 ### 3.5 Movement — `src/sim/movement.ts`
 
-`reachableTiles` — breadth-first search, uniform cost 1 per step, 8
-neighbours, depth ≤ `stats.mp`. Exact rules:
+`reachableTiles` — Dijkstra over per-tile movement cost, 8 neighbours,
+cumulative cost ≤ `stats.mp`. Implemented as Dial's algorithm (a bucket
+queue indexed by exact integer cost) rather than a binary heap: every
+terrain cost is a small positive integer and `mp` is tiny, so a heap would
+be pure ceremony. Cost and passability both come from one lookup,
+`terrainCost(terrain, domain)` in `src/sim/map.ts` — `Infinity` means
+impassable. Exact rules:
 
-1. The unit's own tile is always in the result (a legal "move nowhere").
-2. A tile may be **entered** iff it is in bounds, `terrain === 'plain'`, and
-   unoccupied by any unit (friend or foe). No moving through allies.
-3. Diagonal steps have no corner restriction: `canStep` depends only on the
-   destination tile. Walls seal only where they are ≥2 thick.
-4. **ZoC:** if a newly-entered tile is adjacent (Chebyshev 1) to a living
-   enemy unit, it is added to the result but **not expanded** — the unit
-   stops there. It is marked *terminal*, not *impassable*; this distinction
-   is the single most likely bug in the file and has a dedicated test.
+1. The unit's own tile is always in the result, at cost 0 (a legal "move
+   nowhere").
+2. A tile may be **entered** iff it is in bounds, `terrainCost(terrain,
+   domain)` is finite for the mover's `domain`, unoccupied by any unit
+   (friend or foe), and the cumulative cost to reach it does not exceed
+   `mp`. No moving through allies.
+3. Diagonal steps have no corner restriction: passability depends only on
+   the destination tile. Walls seal only where they are ≥2 thick.
+4. **ZoC:** if a tile is adjacent (Chebyshev 1) to a living enemy unit, it
+   is added to the result but **not expanded** — the unit stops there. It
+   is marked *terminal*, not *impassable*; this distinction is the single
+   most likely bug in the file and has a dedicated test. The check runs
+   when a tile is settled (its shortest cost finalized), the same point in
+   the algorithm the old breadth-first version checked it at.
 5. The **start tile is always expanded**, even when it is in enemy ZoC. A
    unit that begins its turn in contact can move away freely. This
    guarantees no unit is ever permanently frozen.
 
 Returned positions are sorted `(y, x)` ascending so the AI is deterministic
 without needing a stable sort.
+
+`Terrain` has four members: `plain` (cost 1 to `land`), `wall` (impassable
+to everything built so far), `rough` (cost 2, still `land`-passable), and
+`water` (impassable to `land`, passable to `sea`). Only `plain`/`wall`
+appear on `MAP_STANDARD` today — `rough`/`water` exist so the cost table and
+domain restriction are exercised by tests ahead of the map that will
+actually place them (ROADMAP.md). `sea`/`air` domain costs have no unit to
+exercise them yet; see the comment on `TERRAIN_COST` in `map.ts` for their
+placeholder values.
 
 ### 3.6 Combat — `src/sim/combat.ts`
 
@@ -396,22 +421,21 @@ Not in this version. Listed so they are decisions, not omissions. Entries
 marked **→ ROADMAP** are scheduled to be reclaimed and are no longer permanent
 decisions:
 
-- Terrain effects of any kind — no movement cost, no defence bonus. `wall` is
-  purely impassable. Movement is uniform cost, so BFS never needs to become
-  Dijkstra. **→ ROADMAP, phase 2.**
+- Terrain defence bonuses. Movement cost and domain restriction are built
+  (§3.5); no terrain grants a combat bonus, and `wall` remains impassable to
+  every domain built so far.
 - Any third unit type, unit abilities, items, upgrades, veterancy, or healing.
-  **→ ROADMAP, phase 5** for ship and plane. Merging (§3.7) is the one
+  **→ ROADMAP, phase 3** for ship and plane. Merging (§3.7) is the one
   exception already built: it is not an ability on a unit type, it is an
   action.
 - Multiple maps, a map-select screen, or procedural generation.
-  **→ ROADMAP, phases 3–4.**
+  **→ ROADMAP, phases 1–2.**
 - Fog of war and any form of hidden information. Both players see everything;
   `GameState` has no per-player view.
 - Undo, redo, save/load, or a persisted replay format. `{ seed, log }` is
   sufficient to reconstruct any game, but nothing writes it to disk.
 - Human-vs-human hot seat, and networked play.
 - Movement tweening, attack animations, sound, particles, camera or zoom.
-  **Board size → ROADMAP, phase 1**; tweening and sound remain out of scope.
 - Sprites or any loaded asset. The renderer must have no async init.
 - Difficulty levels, and any AI deeper than one ply. No minimax, no
   expectimax, no lookahead across units.

@@ -77,12 +77,24 @@ advance `state.rng`. There are two entry points for different callers:
   rolls are applied — see the code comments in `ai.ts` if debugging an
   illegal-action error during an AI turn.
 
-**Movement's zone-of-control rule has one sharp edge**: in
-`src/sim/movement.ts`, a tile adjacent to a living enemy is added to
-`reachableTiles`'s result but not expanded further — except the unit's own
-starting tile, which is always expanded even if it's already in a ZoC. This
-asymmetry (`isStart` check in the BFS) is the most likely place to introduce
-a movement bug; there's a dedicated test for it in `movement.test.ts`.
+**Movement is Dijkstra over per-tile terrain cost, not plain BFS.**
+`reachableTiles` in `src/sim/movement.ts` uses Dial's algorithm (a bucket
+queue indexed by exact integer cost, not a binary heap — costs are always
+small positive integers, so a heap would be pure ceremony). Cost and
+passability both come from `terrainCost(terrain, domain)` in `src/sim/map.ts`
+(`Infinity` = impassable), keyed by the mover's `UnitStats.domain` — today
+only `'land'` is exercised by a real unit. `plain`/`wall` behave exactly as
+before (cost 1 / impassable); `rough` (cost 2) and `water` (impassable to
+`land`) exist so the mechanism is tested ahead of the map that will actually
+place them, per ROADMAP.md.
+
+**Movement's zone-of-control rule has one sharp edge**: a tile adjacent to a
+living enemy is added to `reachableTiles`'s result but not expanded
+further — except the unit's own starting tile, which is always expanded even
+if it's already in a ZoC. This asymmetry (the `isStart` check, evaluated when
+a tile is settled/finalized in the bucket queue) is the most likely place to
+introduce a movement bug; there's a dedicated test for it in
+`movement.test.ts`.
 
 **Combat resolution order is what prevents simultaneous death**: in
 `src/sim/combat.ts`, `resolveAttack` rolls and applies attacker damage first,
